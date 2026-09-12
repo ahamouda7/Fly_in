@@ -41,7 +41,7 @@ def pars() -> Optional[Dict[str, Any]]:
 
             if conf_lists[0][0].lower().strip() != "nb_drones":
                 raise InvalidConf(
-                    f"Invalid config '{k}', first line must be 'nb_drones'"
+                    "Invalid config, first line must be 'nb_drones'"
                     )
 
             for a_list in conf_lists:
@@ -53,7 +53,7 @@ def pars() -> Optional[Dict[str, Any]]:
                 if '#' in a_list[1]:
                     i = comment_index(a_list[1])
                     a_list[1] = a_list[1][:i]
-                conf_dict[a_list[0].lower().strip()] = a_list[1].strip()
+                conf_dict[a_list[0].lower().strip()] = a_list[1].lower().strip()
 
             keys = ["nb_drones", "start_hub", "hub", "end_hub",
                     "connection"]
@@ -70,98 +70,32 @@ def pars() -> Optional[Dict[str, Any]]:
             end_hub = conf_dict["end_hub"]
             connection = conf_dict["connection"]
 
-            width = conf_dict["WIDTH"] = int(width)
-            height = conf_dict["HEIGHT"] = int(height)
+            nb_drones = conf_dict["nb_drones"] = int(nb_drones)
 
-            entry = entry.split(",")
-            exit = exit.split(",")
-            if len(entry) != 2 or len(exit) != 2:
+            start_hub = start_hub.split(" ")
+            end_hub = end_hub.split(" ")
+            hub = hub.split(" ")
+            if len(start_hub) != 4 or len(end_hub) != 4 or len(hub) != 4:
                 raise InvalidConf(
-                    "Invalid config, Entry and Exit must include 2 coordinates"
+                    "Invalid config, Hubs must include 3 parameters "
+                    "(name, x, y)"
                     )
 
-            en1 = int(entry[0])
-            en2 = int(entry[1])
-            entry = conf_dict["ENTRY"] = (en1, en2)
+            connection = connection.split("-")
+            if len(connection) != 2:
+                raise InvalidConf("Invalid config, a connection needs 2 hubs")
 
-            ex1 = int(exit[0])
-            ex2 = int(exit[1])
-            exit = conf_dict["EXIT"] = (ex1, ex2)
-
-            files_names = [
-                "a_maze_ing.py",
-                "config.txt",
-                "Makefile",
-                "maze_output.py",
-                "parsing.py"
-                ]
-            if output_file in files_names:
-                # conf_dict["OUTPUT_FILE"] = "output.txt"
-                raise InvalidConf(
-                    f"Invalid config {output_file}, output file name "
-                    "must be different than other program files names"
-                    )
-
-            booleen = ["True", "False"]
-            try:
-                perfect = perfect.capitalize()
-                if perfect in booleen:
-                    if perfect == "True":
-                        conf_dict["PERFECT"] = True
-                    elif perfect == "False":
-                        conf_dict["PERFECT"] = False
-                elif int(perfect) == 1 or int(perfect) == 0:
-                    if int(perfect) == 1:
-                        conf_dict["PERFECT"] = True
-                    else:
-                        conf_dict["PERFECT"] = False
-                else:
-                    raise InvalidConf(
-                        f"Invalid config '{perfect}', "
-                        "it is not a bool() value"
-                        )
-            except ValueError:
-                print(
-                    f"ERROR: Invalid config '{perfect}', "
-                    "it is not a bool() value"
-                    )
-                sys.exit()
-
-            if "SEED" not in conf_dict:
-                seed = conf_dict["SEED"] = None
-            if (seed is not None) and (seed.strip() == ""):
-                raise InvalidConf(
-                    "Invalid config, it does not respect "
-                    "the 'KEY=VALUE' format"
-                    )
-
-            if width <= 0 or height <= 0:
-                raise InvalidConf(
-                    "Invalid config, width and height must be greater than '0'"
-                    )
-
-            if (
-                ((en1 < 0) or (en2 < 0))
-                or ((ex1 < 0) or (ex2 < 0))
-            ):
-                raise InvalidConf(
-                    "Invalid config, coordinates must be positive"
-                    )
-
-            if (
-                ((en1 >= width) or (en2 >= height))
-                or ((ex1 >= width) or (ex2 >= height))
-            ):
-                raise InvalidConf(
-                    "Invalid config, a coordinate is out of range"
-                    )
-
-            if entry == exit:
-                raise InvalidConf(
-                    "Invalid config, Entry and Exit must be different"
-                    )
+            conf_dict["nb_drones"] = nb_drones
+            conf_dict["start_hub"] = start_hub
+            conf_dict["end_hub"] = end_hub
+            conf_dict["hub"] = hub
+            conf_dict["connection"] = connection
     except Exception as e:
         print(f"ERROR: {e}")
         return None
 
     return conf_dict
+
+
+if pars():
+    print(pars())
