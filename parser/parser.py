@@ -1,4 +1,5 @@
 from typing import Dict, Any, Optional
+import matplotlib.colors as color
 import sys
 
 
@@ -33,7 +34,13 @@ def pars() -> Optional[Dict[str, Any]]:
         with open(sys.argv[1]) as file:
             get_conf = file.read().split("\n")
             conf_lists = []
-            conf_dict: Dict[str, Any] = {}
+            conf_dict: Dict[str, Any] = {
+                "nb_drones": 0,
+                "start_hub": {},
+                "hubs": [],
+                "end_hub": {},
+                "connections": []
+                }
 
             for line in get_conf:
                 if line.strip() != "" and line.strip()[0] != '#':
@@ -53,10 +60,20 @@ def pars() -> Optional[Dict[str, Any]]:
                 if '#' in a_list[1]:
                     i = comment_index(a_list[1])
                     a_list[1] = a_list[1][:i]
-                conf_dict[a_list[0].lower().strip()] = a_list[1].lower().strip()
 
-            keys = ["nb_drones", "start_hub", "hub", "end_hub",
-                    "connection"]
+                if (
+                    a_list[0].lower().strip() == "nb_drones"
+                    or a_list[0].lower().strip() == "start_hub"
+                    or a_list[0].lower().strip() == "end_hub"
+                ):
+                    conf_dict[a_list[0].lower().strip()] = a_list[1].lower().strip()
+                elif a_list[0].lower().strip() == "hub":
+                    conf_dict["hubs"].append(a_list[1].lower().strip())
+                else:
+                    conf_dict["connections"].append(a_list[1].lower().strip())
+
+            keys = ["nb_drones", "start_hub", "hubs", "end_hub",
+                    "connections"]
             for k in conf_dict:
                 if k not in keys:
                     raise InvalidConf(f"Invalid config '{k}', is not a key")
@@ -66,30 +83,81 @@ def pars() -> Optional[Dict[str, Any]]:
 
             nb_drones = conf_dict["nb_drones"]
             start_hub = conf_dict["start_hub"]
-            hub = conf_dict["hub"]
+            hubs = conf_dict["hubs"]
             end_hub = conf_dict["end_hub"]
-            connection = conf_dict["connection"]
+            connections = conf_dict["connections"]
 
             nb_drones = conf_dict["nb_drones"] = int(nb_drones)
 
             start_hub = start_hub.split(" ")
             end_hub = end_hub.split(" ")
-            hub = hub.split(" ")
-            if len(start_hub) != 4 or len(end_hub) != 4 or len(hub) != 4:
-                raise InvalidConf(
-                    "Invalid config, Hubs must include 3 parameters "
-                    "(name, x, y)"
-                    )
+            # if len(start_hub) != 4 or len(end_hub) != 4:
+            #     raise InvalidConf(
+            #         "Invalid config, Hubs must include 3 parameters "
+            #         "(name, x, y)"
+            #         )
 
-            connection = connection.split("-")
-            if len(connection) != 2:
-                raise InvalidConf("Invalid config, a connection needs 2 hubs")
+            for i in range(len(hubs)):
+                hubs[i] = hubs[i].split(" ")
+                # if len(hubs[i]) != 4:
+                #     raise InvalidConf(
+                #         "Invalid config, Hubs must include 3 parameters "
+                #         "(name, x, y)"
+                #         )
+
+            s_brackets = start_hub[3:]
+            for i in range(len(s_brackets)):
+                s_brackets[i] = s_brackets[i].strip("[]").split("=")
+            start_hub = {
+                "start": start_hub[0],
+                "x": int(start_hub[1]),
+                "y": int(start_hub[2]),
+                }
+            for i in range(len(s_brackets)):
+                start_hub[s_brackets[i][0]] = s_brackets[i][1]
+
+            for i in range(len(hubs)):
+                s_brackets = hubs[i][3:]
+                for j in range(len(s_brackets)):
+                    s_brackets[j] = s_brackets[j].strip("[]").split("=")
+                hubs[i] = {
+                    "start": hubs[i][0],
+                    "x": int(hubs[i][1]),
+                    "y": int(hubs[i][2]),
+                    }
+                for j in range(len(s_brackets)):
+                    hubs[i][s_brackets[j][0]] = s_brackets[j][1]
+
+            s_brackets = end_hub[3:]
+            for i in range(len(s_brackets)):
+                s_brackets[i] = s_brackets[i].strip("[]").split("=")
+            end_hub = {
+                "start": end_hub[0],
+                "x": int(end_hub[1]),
+                "y": int(end_hub[2]),
+                }
+            for i in range(len(s_brackets)):
+                end_hub[s_brackets[i][0]] = s_brackets[i][1]
+
+            for i in range(len(connections)):
+                connections[i] = connections[i].replace("-", " ").split(" ")
+                if len(connections[i]) != 2 and len(connections[i]) != 3:
+                    raise InvalidConf("Invalid config, a connection needs 2 hubs")
+                if len(connections[i]) == 3:
+                    link_capacity = connections[i][2].split("=")
+                    connections[i] = {
+                        "connection": (connections[i][0], connections[i][1]),
+                        "max_link_capacity": link_capacity[1]
+                        },
+                else:
+                    connections[i] = {"connection": (connections[i][0], connections[i][1])}
+
 
             conf_dict["nb_drones"] = nb_drones
             conf_dict["start_hub"] = start_hub
             conf_dict["end_hub"] = end_hub
-            conf_dict["hub"] = hub
-            conf_dict["connection"] = connection
+            conf_dict["hubs"] = hubs
+            conf_dict["connections"] = connections
     except Exception as e:
         print(f"ERROR: {e}")
         return None
