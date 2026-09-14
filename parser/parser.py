@@ -24,6 +24,12 @@ def comment_index(s: str) -> int:
     return -1
 
 
+def is_known_color(may_color: str) -> bool:
+    if may_color == "rainbow":
+        return True
+    return may_color in color.CSS4_COLORS
+
+
 def pars() -> Optional[Dict[str, Any]]:
     try:
         if len(sys.argv) != 2:
@@ -66,7 +72,9 @@ def pars() -> Optional[Dict[str, Any]]:
                     or a_list[0].lower().strip() == "start_hub"
                     or a_list[0].lower().strip() == "end_hub"
                 ):
-                    conf_dict[a_list[0].lower().strip()] = a_list[1].lower().strip()
+                    conf_dict[a_list[0].lower().strip()] = (
+                        a_list[1].lower().strip()
+                        )
                 elif a_list[0].lower().strip() == "hub":
                     conf_dict["hubs"].append(a_list[1].lower().strip())
                 else:
@@ -88,6 +96,8 @@ def pars() -> Optional[Dict[str, Any]]:
             connections = conf_dict["connections"]
 
             nb_drones = conf_dict["nb_drones"] = int(nb_drones)
+            if nb_drones < 0:
+                raise InvalidConf("Invalid config, nb_drones must be positive")
 
             start_hub = start_hub.split(" ")
             end_hub = end_hub.split(" ")
@@ -107,51 +117,157 @@ def pars() -> Optional[Dict[str, Any]]:
 
             s_brackets = start_hub[3:]
             for i in range(len(s_brackets)):
-                s_brackets[i] = s_brackets[i].strip("[]").split("=")
+                s_brackets[i] = s_brackets[i].lower().strip("[]").split("=")
             start_hub = {
                 "start": start_hub[0],
                 "x": int(start_hub[1]),
                 "y": int(start_hub[2]),
                 }
+            if start_hub["x"] < 0 or start_hub["y"] < 0:
+                raise InvalidConf("Invalid config, x & y must be positive")
             for i in range(len(s_brackets)):
-                start_hub[s_brackets[i][0]] = s_brackets[i][1]
+                if s_brackets[i][0] == "max_drones":
+                    start_hub[s_brackets[i][0]] = int(s_brackets[i][1])
+                    if (
+                        start_hub[s_brackets[i][0]] < 0
+                        or start_hub[s_brackets[i][0]] < 0
+                    ):
+                        raise InvalidConf(
+                            "Invalid config, max_drones must be positive"
+                            )
+                elif s_brackets[i][0] == "color":
+                    if is_known_color(s_brackets[i][1]):
+                        continue
+                    else:
+                        raise InvalidConf(
+                            f"Invalid config '{s_brackets[i][1]}', "
+                            "is not a color"
+                            )
+                elif s_brackets[i][0] == "zone":
+                    zones = ["normal", "restricted", "priority", "blocked"]
+                    if start_hub[s_brackets[i][0]] not in zones:
+                        raise InvalidConf(
+                            f"Invalid config '{s_brackets[i][1]}', "
+                            "is not a zone"
+                            )
+                    start_hub[s_brackets[i][0]] = s_brackets[i][1]
+                else:
+                    raise InvalidConf(
+                        f"Invalid config '{s_brackets[i][1]}', "
+                        "is not available"
+                        )
 
             for i in range(len(hubs)):
                 s_brackets = hubs[i][3:]
                 for j in range(len(s_brackets)):
-                    s_brackets[j] = s_brackets[j].strip("[]").split("=")
+                    s_brackets[j] = (
+                        s_brackets[j].lower().strip("[]").split("=")
+                        )
                 hubs[i] = {
                     "start": hubs[i][0],
                     "x": int(hubs[i][1]),
                     "y": int(hubs[i][2]),
                     }
+                if hubs[i]["x"] < 0 or hubs[i]["y"] < 0:
+                    raise InvalidConf("Invalid config, x & y must be positive")
                 for j in range(len(s_brackets)):
-                    hubs[i][s_brackets[j][0]] = s_brackets[j][1]
+                    if s_brackets[j][0] == "max_drones":
+                        hubs[i][s_brackets[j][0]] = int(s_brackets[j][1])
+                        if (
+                            hubs[i][s_brackets[j][0]] < 0
+                            or hubs[i][s_brackets[j][0]] < 0
+                        ):
+                            raise InvalidConf(
+                                "Invalid config, max_drones must be positive"
+                                )
+                    elif s_brackets[j][0] == "color":
+                        if is_known_color(s_brackets[j][1]):
+                            continue
+                        else:
+                            raise InvalidConf(
+                                f"Invalid config '{s_brackets[j][1]}', "
+                                "is not a color"
+                                )
+                    elif s_brackets[j][0] == "zone":
+                        zones = ["normal", "restricted", "priority", "blocked"]
+                        if hubs[i][s_brackets[j][0]] not in zones:
+                            raise InvalidConf(
+                                f"Invalid config '{s_brackets[j][1]}', "
+                                "is not a zone"
+                                )
+                        hubs[i][s_brackets[j][0]] = s_brackets[j][1]
+                    else:
+                        raise InvalidConf(
+                            f"Invalid config '{s_brackets[j][1]}', "
+                            "is not available"
+                            )
 
             s_brackets = end_hub[3:]
             for i in range(len(s_brackets)):
-                s_brackets[i] = s_brackets[i].strip("[]").split("=")
+                s_brackets[i] = s_brackets[i].lower().strip("[]").split("=")
             end_hub = {
                 "start": end_hub[0],
                 "x": int(end_hub[1]),
                 "y": int(end_hub[2]),
                 }
+            if end_hub["x"] < 0 or end_hub["y"] < 0:
+                raise InvalidConf("Invalid config, x & y must be positive")
             for i in range(len(s_brackets)):
-                end_hub[s_brackets[i][0]] = s_brackets[i][1]
+                if s_brackets[i][0] == "max_drones":
+                    end_hub[s_brackets[i][0]] = int(s_brackets[i][1])
+                    if (
+                        end_hub[s_brackets[i][0]] < 0
+                        or end_hub[s_brackets[i][0]] < 0
+                    ):
+                        raise InvalidConf(
+                            "Invalid config, max_drones must be positive"
+                            )
+                elif s_brackets[i][0] == "color":
+                    if is_known_color(s_brackets[i][1]):
+                        continue
+                    else:
+                        raise InvalidConf(
+                            f"Invalid config '{s_brackets[i][1]}', "
+                            "is not a color"
+                            )
+                elif s_brackets[i][0] == "zone":
+                    zones = ["normal", "restricted", "priority", "blocked"]
+                    if end_hub[s_brackets[i][0]] not in zones:
+                        raise InvalidConf(
+                            f"Invalid config '{s_brackets[i][1]}', "
+                            "is not a zone"
+                            )
+                    end_hub[s_brackets[i][0]] = s_brackets[i][1]
+                else:
+                    raise InvalidConf(
+                        f"Invalid config '{s_brackets[i][1]}', "
+                        "is not available"
+                        )
 
             for i in range(len(connections)):
                 connections[i] = connections[i].replace("-", " ").split(" ")
                 if len(connections[i]) != 2 and len(connections[i]) != 3:
-                    raise InvalidConf("Invalid config, a connection needs 2 hubs")
+                    raise InvalidConf(
+                        "Invalid config, a connection needs 2 hubs"
+                        )
                 if len(connections[i]) == 3:
-                    link_capacity = connections[i][2].split("=")
+                    link_capacity = (
+                        connections[i][2].strip("[]").lower().split("=")
+                        )
+                    link_capacity[1] = int(link_capacity[1])
+                    if link_capacity[1] < 0:
+                        raise InvalidConf(
+                            "Invalid config, "
+                            "max_link_capacity must be positive"
+                            )
                     connections[i] = {
                         "connection": (connections[i][0], connections[i][1]),
                         "max_link_capacity": link_capacity[1]
                         },
                 else:
-                    connections[i] = {"connection": (connections[i][0], connections[i][1])}
-
+                    connections[i] = {
+                        "connection": (connections[i][0], connections[i][1])
+                        }
 
             conf_dict["nb_drones"] = nb_drones
             conf_dict["start_hub"] = start_hub
