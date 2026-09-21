@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional
 import matplotlib.colors as color
 import sys
 
@@ -30,21 +30,60 @@ def is_known_color(may_color: str) -> bool:
     return may_color in color.CSS4_COLORS
 
 
+def extract_bracket_tags(raw: str, where: str) -> List[str]:
+    """Pull the raw 'key=value' tags out of an optional [...] block.
+
+    Whitespace right after '[', right before ']', or between tags is
+    ignored. An empty/missing block returns no tags. Anything left
+    after the closing ']' is a real error, not whitespace noise.
+    """
+    raw = (raw or "").strip()
+    if raw == "":
+        return []
+    if not raw.startswith("["):
+        raise InvalidConf(
+            f"Invalid config in {where}, metadata must start with '['"
+            )
+    close_idx = raw.rfind("]")
+    if close_idx == -1:
+        raise InvalidConf(
+            f"Invalid config in {where}, metadata is missing a closing ']'"
+            )
+    extra = raw[close_idx + 1:].strip()
+    if extra:
+        raise InvalidConf(
+            f"Invalid config in {where}, unexpected content "
+            f"'{extra}' after ']'"
+            )
+    return raw[1:close_idx].split()
+
+
+def collapse_bracket_spaces(text: str) -> str:
+    """Remove spaces that fall between '[' and ']' in a string."""
+    start = text.find("[")
+    end = text.find("]")
+    if start == -1 or end == -1 or end <= start:
+        return text
+    inside = text[start:end + 1]
+    inside = inside.replace(" ", "")
+    return text[:start] + inside + text[end + 1:]
+
+
 def pars() -> Optional[Dict[str, Any]]:
     try:
         if len(sys.argv) != 2:
             raise TokenError(
-                "Invalid tokens <python3 a_maze_ing.py config.txt>"
+                "Invalid tokens <python3 parser.py config.txt>"
                 )
 
         with open(sys.argv[1]) as file:
             get_conf = file.read().split("\n")
             conf_lists = []
             conf_dict: Dict[str, Any] = {
-                "nb_drones": 0,
-                "start_hub": {},
+                "nb_drones": None,
+                "start_hub": None,
                 "hubs": [],
-                "end_hub": {},
+                "end_hub": None,
                 "connections": []
                 }
 
@@ -52,11 +91,15 @@ def pars() -> Optional[Dict[str, Any]]:
                 if line.strip() != "" and line.strip()[0] != '#':
                     conf_lists.append(line.split(":", 1))
 
+            if len(conf_lists) == 0:
+                raise InvalidConf("Invalid config, file is empty")
             if conf_lists[0][0].lower().strip() != "nb_drones":
                 raise InvalidConf(
                     "Invalid config, first line must be 'nb_drones'"
                     )
 
+            seen_singular = set()
+            declared_so_far: set = set()
             for a_list in conf_lists:
                 if len(a_list) == 1:
                     raise InvalidConf(
@@ -67,26 +110,39 @@ def pars() -> Optional[Dict[str, Any]]:
                     i = comment_index(a_list[1])
                     a_list[1] = a_list[1][:i]
 
-                if (
-                    a_list[0].lower().strip() == "nb_drones"
-                    or a_list[0].lower().strip() == "start_hub"
-                    or a_list[0].lower().strip() == "end_hub"
-                ):
-                    conf_dict[a_list[0].lower().strip()] = (
-                        a_list[1].lower().strip()
+                key = a_list[0].lower().strip()
+                if key in ("nb_drones", "start_hub", "end_hub"):
+                    if key in seen_singular:
+                        raise InvalidConf(
+                            f"Invalid config, '{key}' must appear "
+                            "exactly once, found a duplicate"
+                            )
+                    seen_singular.add(key)
+                    value = a_list[1].lower().strip()
+                    conf_dict[key] = value
+                    if key in ("start_hub", "end_hub"):
+                        tokens = value.split()
+                        if tokens:
+                            declared_so_far.add(tokens[0])
+                elif key == "hub":
+                    value = a_list[1].lower().strip()
+                    conf_dict["hubs"].append(value)
+                    tokens = value.split()
+                    if tokens:
+                        declared_so_far.add(tokens[0])
+                elif key == "connection":
+                    value = a_list[1].lower().strip()
+                    conf_dict["connections"].append(
+                        (value, frozenset(declared_so_far))
                         )
-                elif a_list[0].lower().strip() == "hub":
-                    conf_dict["hubs"].append(a_list[1].lower().strip())
                 else:
-                    conf_dict["connections"].append(a_list[1].lower().strip())
+                    raise InvalidConf(
+                        f"Invalid config '{a_list[0].strip()}', is not a key"
+                        )
 
-            keys = ["nb_drones", "start_hub", "hubs", "end_hub",
-                    "connections"]
-            for k in conf_dict:
-                if k not in keys:
-                    raise InvalidConf(f"Invalid config '{k}', is not a key")
-            for k in keys:
-                if k not in list(conf_dict):
+            required_keys = ["nb_drones", "start_hub", "end_hub"]
+            for k in required_keys:
+                if conf_dict[k] is None:
                     raise MissingConf(f"Missing the '{k}' config")
 
             nb_drones = conf_dict["nb_drones"]
@@ -95,49 +151,63 @@ def pars() -> Optional[Dict[str, Any]]:
             end_hub = conf_dict["end_hub"]
             connections = conf_dict["connections"]
 
-            nb_drones = conf_dict["nb_drones"] = int(nb_drones)
+            try:
+                nb_drones = conf_dict["nb_drones"] = int(nb_drones)
+            except ValueError:
+                raise InvalidConf(
+                    "Invalid config, nb_drones must be an integer"
+                    )
             if nb_drones < 0:
                 raise InvalidConf("Invalid config, nb_drones must be positive")
 
-            start_hub = start_hub.split(" ")
-            end_hub = end_hub.split(" ")
-            # if len(start_hub) != 4 or len(end_hub) != 4:
-            #     raise InvalidConf(
-            #         "Invalid config, Hubs must include 3 parameters "
-            #         "(name, x, y)"
-            #         )
+            start_hub = start_hub.split(" ", 3)
+            end_hub = end_hub.split(" ", 3)
 
             for i in range(len(hubs)):
-                hubs[i] = hubs[i].split(" ")
-                # if len(hubs[i]) != 4:
-                #     raise InvalidConf(
-                #         "Invalid config, Hubs must include 3 parameters "
-                #         "(name, x, y)"
-                #         )
+                hubs[i] = hubs[i].split(" ", 3)
 
-            s_brackets = start_hub[3:]
+            if len(start_hub) < 3:
+                raise InvalidConf(
+                    "Invalid config, start_hub must have <name x y>"
+                    )
+            if "-" in start_hub[0]:
+                raise InvalidConf(
+                    "Invalid config, start_hub name must not contain '-'"
+                    )
+            raw_meta = start_hub[3] if len(start_hub) > 3 else ""
+            s_brackets = extract_bracket_tags(raw_meta, "start_hub")
             for i in range(len(s_brackets)):
-                s_brackets[i] = s_brackets[i].lower().strip("[]").split("=")
-            start_hub = {
-                "start": start_hub[0],
-                "x": int(start_hub[1]),
-                "y": int(start_hub[2]),
-                }
+                s_brackets[i] = s_brackets[i].lower().split("=")
+                if len(s_brackets[i]) != 2:
+                    raise InvalidConf(
+                        "Invalid config in start_hub, "
+                        "metadata must be 'key=value'"
+                        )
+            try:
+                start_hub = {
+                    "start": start_hub[0],
+                    "x": int(start_hub[1]),
+                    "y": int(start_hub[2]),
+                    }
+            except ValueError:
+                raise InvalidConf(
+                    "Invalid config, start_hub x/y must be integers"
+                    )
             if start_hub["x"] < 0 or start_hub["y"] < 0:
                 raise InvalidConf("Invalid config, x & y must be positive")
+            seen_keys = set()
             for i in range(len(s_brackets)):
                 if s_brackets[i][0] == "max_drones":
-                    start_hub[s_brackets[i][0]] = int(s_brackets[i][1])
-                    if (
-                        start_hub[s_brackets[i][0]] < 0
-                        or start_hub[s_brackets[i][0]] < 0
-                    ):
-                        raise InvalidConf(
-                            "Invalid config, max_drones must be positive"
-                            )
-                elif s_brackets[i][0] == "color":
+                    continue
+                if s_brackets[i][0] in seen_keys:
+                    raise InvalidConf(
+                        f"Invalid config in start_hub, duplicate "
+                        f"metadata key '{s_brackets[i][0]}'"
+                        )
+                seen_keys.add(s_brackets[i][0])
+                if s_brackets[i][0] == "color":
                     if is_known_color(s_brackets[i][1]):
-                        continue
+                        start_hub[s_brackets[i][0]] = s_brackets[i][1]
                     else:
                         raise InvalidConf(
                             f"Invalid config '{s_brackets[i][1]}', "
@@ -145,7 +215,7 @@ def pars() -> Optional[Dict[str, Any]]:
                             )
                 elif s_brackets[i][0] == "zone":
                     zones = ["normal", "restricted", "priority", "blocked"]
-                    if start_hub[s_brackets[i][0]] not in zones:
+                    if s_brackets[i][1] not in zones:
                         raise InvalidConf(
                             f"Invalid config '{s_brackets[i][1]}', "
                             "is not a zone"
@@ -153,36 +223,71 @@ def pars() -> Optional[Dict[str, Any]]:
                     start_hub[s_brackets[i][0]] = s_brackets[i][1]
                 else:
                     raise InvalidConf(
-                        f"Invalid config '{s_brackets[i][1]}', "
-                        "is not available"
+                        f"Invalid config, metadata key "
+                        f"'{s_brackets[i][0]}' is not available"
                         )
+            start_hub["max_drones"] = nb_drones
 
             for i in range(len(hubs)):
-                s_brackets = hubs[i][3:]
+                if "-" in hubs[i][0]:
+                    raise InvalidConf(
+                        f"Invalid config, hub name '{hubs[i][0]}' "
+                        "must not contain '-'"
+                        )
+                raw_meta = hubs[i][3] if len(hubs[i]) > 3 else ""
+                s_brackets = extract_bracket_tags(
+                    raw_meta, f"hub '{hubs[i][0]}'"
+                    )
                 for j in range(len(s_brackets)):
-                    s_brackets[j] = (
-                        s_brackets[j].lower().strip("[]").split("=")
+                    s_brackets[j] = s_brackets[j].lower().split("=")
+                    if len(s_brackets[j]) != 2:
+                        raise InvalidConf(
+                            f"Invalid config in hub '{hubs[i][0]}', "
+                            "metadata must be 'key=value'"
+                            )
+                if len(hubs[i]) < 3:
+                    raise InvalidConf(
+                        f"Invalid config, hub '{hubs[i][0]}' is missing "
+                        "its x or y coordinate"
+                        )
+                try:
+                    hub_x = int(hubs[i][1])
+                    hub_y = int(hubs[i][2])
+                except ValueError:
+                    raise InvalidConf(
+                        f"Invalid config, hub '{hubs[i][0]}' x and y "
+                        "must be integers"
                         )
                 hubs[i] = {
                     "start": hubs[i][0],
-                    "x": int(hubs[i][1]),
-                    "y": int(hubs[i][2]),
+                    "x": hub_x,
+                    "y": hub_y,
                     }
                 if hubs[i]["x"] < 0 or hubs[i]["y"] < 0:
                     raise InvalidConf("Invalid config, x & y must be positive")
+                seen_keys = set()
                 for j in range(len(s_brackets)):
+                    if s_brackets[j][0] in seen_keys:
+                        raise InvalidConf(
+                            f"Invalid config in hub '{hubs[i]['start']}', "
+                            f"duplicate metadata key '{s_brackets[j][0]}'"
+                            )
+                    seen_keys.add(s_brackets[j][0])
                     if s_brackets[j][0] == "max_drones":
-                        hubs[i][s_brackets[j][0]] = int(s_brackets[j][1])
-                        if (
-                            hubs[i][s_brackets[j][0]] < 0
-                            or hubs[i][s_brackets[j][0]] < 0
-                        ):
+                        try:
+                            hubs[i][s_brackets[j][0]] = int(s_brackets[j][1])
+                        except ValueError:
+                            raise InvalidConf(
+                                f"Invalid config in hub '{hubs[i]['start']}', "
+                                "max_drones must be an integer"
+                                )
+                        if hubs[i][s_brackets[j][0]] < 0:
                             raise InvalidConf(
                                 "Invalid config, max_drones must be positive"
                                 )
                     elif s_brackets[j][0] == "color":
                         if is_known_color(s_brackets[j][1]):
-                            continue
+                            hubs[i][s_brackets[j][0]] = s_brackets[j][1]
                         else:
                             raise InvalidConf(
                                 f"Invalid config '{s_brackets[j][1]}', "
@@ -190,7 +295,7 @@ def pars() -> Optional[Dict[str, Any]]:
                                 )
                     elif s_brackets[j][0] == "zone":
                         zones = ["normal", "restricted", "priority", "blocked"]
-                        if hubs[i][s_brackets[j][0]] not in zones:
+                        if s_brackets[j][1] not in zones:
                             raise InvalidConf(
                                 f"Invalid config '{s_brackets[j][1]}', "
                                 "is not a zone"
@@ -198,33 +303,52 @@ def pars() -> Optional[Dict[str, Any]]:
                         hubs[i][s_brackets[j][0]] = s_brackets[j][1]
                     else:
                         raise InvalidConf(
-                            f"Invalid config '{s_brackets[j][1]}', "
-                            "is not available"
+                            f"Invalid config, metadata key "
+                            f"'{s_brackets[j][0]}' is not available"
                             )
 
-            s_brackets = end_hub[3:]
+            if len(end_hub) < 3:
+                raise InvalidConf(
+                    "Invalid config, end_hub must have <name x y>"
+                    )
+            if "-" in end_hub[0]:
+                raise InvalidConf(
+                    "Invalid config, end_hub name must not contain '-'"
+                    )
+            raw_meta = end_hub[3] if len(end_hub) > 3 else ""
+            s_brackets = extract_bracket_tags(raw_meta, "end_hub")
             for i in range(len(s_brackets)):
-                s_brackets[i] = s_brackets[i].lower().strip("[]").split("=")
-            end_hub = {
-                "start": end_hub[0],
-                "x": int(end_hub[1]),
-                "y": int(end_hub[2]),
-                }
+                s_brackets[i] = s_brackets[i].lower().split("=")
+                if len(s_brackets[i]) != 2:
+                    raise InvalidConf(
+                        "Invalid config in end_hub, "
+                        "metadata must be 'key=value'"
+                        )
+            try:
+                end_hub = {
+                    "start": end_hub[0],
+                    "x": int(end_hub[1]),
+                    "y": int(end_hub[2]),
+                    }
+            except ValueError:
+                raise InvalidConf(
+                    "Invalid config, end_hub x/y must be integers"
+                    )
             if end_hub["x"] < 0 or end_hub["y"] < 0:
                 raise InvalidConf("Invalid config, x & y must be positive")
+            seen_keys = set()
             for i in range(len(s_brackets)):
                 if s_brackets[i][0] == "max_drones":
-                    end_hub[s_brackets[i][0]] = int(s_brackets[i][1])
-                    if (
-                        end_hub[s_brackets[i][0]] < 0
-                        or end_hub[s_brackets[i][0]] < 0
-                    ):
-                        raise InvalidConf(
-                            "Invalid config, max_drones must be positive"
-                            )
-                elif s_brackets[i][0] == "color":
+                    continue
+                if s_brackets[i][0] in seen_keys:
+                    raise InvalidConf(
+                        f"Invalid config in end_hub, duplicate "
+                        f"metadata key '{s_brackets[i][0]}'"
+                        )
+                seen_keys.add(s_brackets[i][0])
+                if s_brackets[i][0] == "color":
                     if is_known_color(s_brackets[i][1]):
-                        continue
+                        end_hub[s_brackets[i][0]] = s_brackets[i][1]
                     else:
                         raise InvalidConf(
                             f"Invalid config '{s_brackets[i][1]}', "
@@ -232,7 +356,7 @@ def pars() -> Optional[Dict[str, Any]]:
                             )
                 elif s_brackets[i][0] == "zone":
                     zones = ["normal", "restricted", "priority", "blocked"]
-                    if end_hub[s_brackets[i][0]] not in zones:
+                    if s_brackets[i][1] not in zones:
                         raise InvalidConf(
                             f"Invalid config '{s_brackets[i][1]}', "
                             "is not a zone"
@@ -240,21 +364,96 @@ def pars() -> Optional[Dict[str, Any]]:
                     end_hub[s_brackets[i][0]] = s_brackets[i][1]
                 else:
                     raise InvalidConf(
-                        f"Invalid config '{s_brackets[i][1]}', "
-                        "is not available"
+                        f"Invalid config, metadata key "
+                        f"'{s_brackets[i][0]}' is not available"
                         )
+            end_hub["max_drones"] = nb_drones
 
+            all_zones = (
+                [start_hub] + hubs + [end_hub]
+                )
+            seen_names = set()
+            seen_coords: Dict[Any, str] = {}
+            for zone in all_zones:
+                name = zone["start"]
+                coords = (zone["x"], zone["y"])
+                if name in seen_names:
+                    raise InvalidConf(
+                        f"Invalid config, duplicate zone name '{name}'"
+                        )
+                seen_names.add(name)
+                if coords in seen_coords:
+                    raise InvalidConf(
+                        f"Invalid config, zone '{name}' has the same "
+                        f"coordinates {coords} as zone "
+                        f"'{seen_coords[coords]}'"
+                        )
+                seen_coords[coords] = name
+
+            raw_connections = connections
+            connections = []
+            connection_allowed = []
+            for raw_connection, allowed_names in raw_connections:
+                cleaned = collapse_bracket_spaces(raw_connection)
+                cleaned = cleaned.replace("-", " ")
+                tokens = cleaned.split()
+                clean_tokens = []
+                for token in tokens:
+                    clean_tokens.append(token.strip("[]"))
+                connections.append(clean_tokens)
+                connection_allowed.append(allowed_names)
+
+            seen_connections = set()
             for i in range(len(connections)):
-                connections[i] = connections[i].replace("-", " ").split(" ")
                 if len(connections[i]) != 2 and len(connections[i]) != 3:
                     raise InvalidConf(
-                        "Invalid config, a connection needs 2 hubs"
+                        "Invalid config, a connection must be "
+                        "<hub1-hub2 [max_link_capacity=x]>, with (x >= 0)"
                         )
+                hub_a, hub_b = connections[i][0], connections[i][1]
+                if hub_a == hub_b:
+                    raise InvalidConf(
+                        f"Invalid config, connection '{hub_a}-{hub_b}' "
+                        "cannot link a zone to itself"
+                        )
+                allowed_names = connection_allowed[i]
+                if hub_a not in allowed_names or hub_b not in allowed_names:
+                    raise InvalidConf(
+                        f"Invalid config, connection '{hub_a}-{hub_b}' "
+                        "references a zone that was not defined earlier "
+                        "in the file"
+                        )
+                pair_key = frozenset((hub_a, hub_b))
+                if pair_key in seen_connections:
+                    raise InvalidConf(
+                        f"Invalid config, duplicate connection "
+                        f"'{hub_a}-{hub_b}'"
+                        )
+                seen_connections.add(pair_key)
                 if len(connections[i]) == 3:
+                    if "=" not in connections[i][2]:
+                        raise InvalidConf(
+                            "Invalid config, a connection must be "
+                            "<hub1-hub2 [max_link_capacity=x]>, with (x >= 0)"
+                            )
                     link_capacity = (
                         connections[i][2].strip("[]").lower().split("=")
                         )
-                    link_capacity[1] = int(link_capacity[1])
+                    if (
+                        len(link_capacity) != 2
+                        or link_capacity[0] != "max_link_capacity"
+                    ):
+                        raise InvalidConf(
+                            "Invalid config, a connection must be "
+                            "<hub1-hub2 [max_link_capacity=x]>, with (x >= 0)"
+                            )
+                    try:
+                        link_capacity[1] = int(link_capacity[1])
+                    except ValueError:
+                        raise InvalidConf(
+                            "Invalid config, "
+                            "max_link_capacity must be an integer"
+                            )
                     if link_capacity[1] < 0:
                         raise InvalidConf(
                             "Invalid config, "
@@ -263,7 +462,7 @@ def pars() -> Optional[Dict[str, Any]]:
                     connections[i] = {
                         "connection": (connections[i][0], connections[i][1]),
                         "max_link_capacity": link_capacity[1]
-                        },
+                        }
                 else:
                     connections[i] = {
                         "connection": (connections[i][0], connections[i][1])
