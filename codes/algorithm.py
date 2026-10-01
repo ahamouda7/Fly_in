@@ -7,7 +7,10 @@ class Dijkstra:
     configs = Parser().pars()
     graph_dict = Graph().graph()
 
-    def algo(self):
+    def algo(self, blocked=None):
+        if blocked is None:
+            blocked = ""
+
         table = {}
         start_hub_name = self.configs["start_hub"]["name"]
         goal = self.configs["end_hub"]["name"]
@@ -19,11 +22,18 @@ class Dijkstra:
                 else [inf, None]
                 )
 
-        unvisited = [hub for hub in self.graph_dict]
+        unvisited = [
+            hub
+            for hub in self.graph_dict
+            if hub != blocked
+            ]
         current_zone = start_hub_name
         while True:
             neighbors = self.graph_dict[current_zone][1]
             for neighbor in neighbors:
+                if neighbor == blocked:
+                    continue
+
                 if neighbor not in unvisited:
                     continue
 
@@ -60,4 +70,5 @@ class Dijkstra:
         return path
 
 
-print(Dijkstra().algo())
+# print(Dijkstra().algo())
+# print(Dijkstra().algo("fast_junction"))
