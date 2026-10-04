@@ -70,5 +70,4 @@ class Dijkstra:
         return path
 
 
-# print(Dijkstra().algo())
-# print(Dijkstra().algo("fast_junction"))
+print(Dijkstra().algo())
