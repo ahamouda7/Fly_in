@@ -1,6 +1,4 @@
 
-from locale import currency
-
 from parser import Parser
 
 
