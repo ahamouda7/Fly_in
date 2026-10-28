@@ -120,20 +120,20 @@ class Parser:
                                 "exactly once, found a duplicate"
                                 )
                         seen_singular.add(key)
-                        value = a_list[1].lower().strip()
+                        value = a_list[1].strip()
                         conf_dict[key] = value
                         if key in ("start_hub", "end_hub"):
                             tokens = value.split()
                             if tokens:
                                 declared_so_far.add(tokens[0])
                     elif key == "hub":
-                        value = a_list[1].lower().strip()
+                        value = a_list[1].strip()
                         conf_dict["hubs"].append(value)
                         tokens = value.split()
                         if tokens:
                             declared_so_far.add(tokens[0])
                     elif key == "connection":
-                        value = a_list[1].lower().strip()
+                        value = a_list[1].strip()
                         conf_dict["connections"].append(
                             (value, frozenset(declared_so_far))
                             )
@@ -160,7 +160,7 @@ class Parser:
                     raise InvalidConf(
                         "Invalid config, nb_drones must be an integer"
                         )
-                if nb_drones < 0:
+                if nb_drones <= 0:
                     raise InvalidConf(
                         "Invalid config, nb_drones must be positive"
                         )
@@ -180,14 +180,19 @@ class Parser:
                         "Invalid config, start_hub name must not contain '-'"
                         )
                 raw_meta = start_hub[3] if len(start_hub) > 3 else ""
-                s_brackets = Parser.extract_bracket_tags(raw_meta, "start_hub")
-                for i in range(len(s_brackets)):
-                    s_brackets[i] = s_brackets[i].lower().split("=")
-                    if len(s_brackets[i]) != 2:
+                raw_brackets = Parser.extract_bracket_tags(
+                    raw_meta, "start_hub"
+                )
+                s_brackets: List[List[str]] = []
+                for bracket in raw_brackets:
+                    parts = bracket.lower().split("=")
+                    if len(parts) != 2:
                         raise InvalidConf(
                             "Invalid config in start_hub, "
                             "metadata must be 'key=value'"
-                            )
+                        )
+                    s_brackets.append(parts)
+
                 try:
                     start_hub = {
                         "name": start_hub[0],
@@ -198,19 +203,18 @@ class Parser:
                     raise InvalidConf(
                         "Invalid config, start_hub x/y must be integers"
                         )
-                if start_hub["x"] < 0 or start_hub["y"] < 0:
-                    raise InvalidConf("Invalid config, x & y must be positive")
+
                 seen_keys = set()
                 for i in range(len(s_brackets)):
-                    if s_brackets[i][0] == "max_drones":
-                        continue
                     if s_brackets[i][0] in seen_keys:
                         raise InvalidConf(
                             f"Invalid config in start_hub, duplicate "
                             f"metadata key '{s_brackets[i][0]}'"
                             )
                     seen_keys.add(s_brackets[i][0])
-                    if s_brackets[i][0] == "color":
+                    if s_brackets[i][0] == "max_drones":
+                        continue
+                    elif s_brackets[i][0] == "color":
                         if Parser.is_known_color(s_brackets[i][1]):
                             start_hub[s_brackets[i][0]] = s_brackets[i][1]
                         else:
@@ -231,9 +235,9 @@ class Parser:
                             f"Invalid config, metadata key "
                             f"'{s_brackets[i][0]}' is not available"
                             )
+                start_hub["max_drones"] = nb_drones
                 if "zone" not in start_hub:
                     start_hub["zone"] = "normal"
-                start_hub["max_drones"] = nb_drones
 
                 for i in range(len(hubs)):
                     if "-" in hubs[i][0]:
@@ -242,16 +246,18 @@ class Parser:
                             "must not contain '-'"
                             )
                     raw_meta = hubs[i][3] if len(hubs[i]) > 3 else ""
-                    s_brackets = Parser.extract_bracket_tags(
+                    raw_brackets = Parser.extract_bracket_tags(
                         raw_meta, f"hub '{hubs[i][0]}'"
-                        )
-                    for j in range(len(s_brackets)):
-                        s_brackets[j] = s_brackets[j].lower().split("=")
-                        if len(s_brackets[j]) != 2:
+                    )
+                    s_brackets = []
+                    for bracket in raw_brackets:
+                        parts = bracket.lower().split("=")
+                        if len(parts) != 2:
                             raise InvalidConf(
-                                f"Invalid config in hub '{hubs[i][0]}', "
+                                "Invalid config in start_hub, "
                                 "metadata must be 'key=value'"
-                                )
+                            )
+                        s_brackets.append(parts)
                     if len(hubs[i]) < 3:
                         raise InvalidConf(
                             f"Invalid config, hub '{hubs[i][0]}' is missing "
@@ -270,10 +276,7 @@ class Parser:
                         "x": hub_x,
                         "y": hub_y,
                         }
-                    if hubs[i]["x"] < 0 or hubs[i]["y"] < 0:
-                        raise InvalidConf(
-                            "Invalid config, x & y must be positive"
-                            )
+
                     seen_keys = set()
                     for j in range(len(s_brackets)):
                         if s_brackets[j][0] in seen_keys:
@@ -293,7 +296,7 @@ class Parser:
                                     f"'{hubs[i]['name']}', "
                                     "max_drones must be an integer"
                                     )
-                            if hubs[i][s_brackets[j][0]] < 0:
+                            if hubs[i][s_brackets[j][0]] <= 0:
                                 raise InvalidConf(
                                     "Invalid config, "
                                     "max_drones must be positive"
@@ -323,6 +326,8 @@ class Parser:
                                 )
                     if "zone" not in hubs[i]:
                         hubs[i]["zone"] = "normal"
+                    if "max_drones" not in hubs[i]:
+                        hubs[i]["max_drones"] = 1
 
                 if len(end_hub) < 3:
                     raise InvalidConf(
@@ -333,14 +338,16 @@ class Parser:
                         "Invalid config, end_hub name must not contain '-'"
                         )
                 raw_meta = end_hub[3] if len(end_hub) > 3 else ""
-                s_brackets = Parser.extract_bracket_tags(raw_meta, "end_hub")
-                for i in range(len(s_brackets)):
-                    s_brackets[i] = s_brackets[i].lower().split("=")
-                    if len(s_brackets[i]) != 2:
+                raw_brackets = Parser.extract_bracket_tags(raw_meta, "end_hub")
+                s_brackets = []
+                for bracket in raw_brackets:
+                    parts = bracket.lower().split("=")
+                    if len(parts) != 2:
                         raise InvalidConf(
-                            "Invalid config in end_hub, "
+                            "Invalid config in start_hub, "
                             "metadata must be 'key=value'"
-                            )
+                        )
+                    s_brackets.append(parts)
                 try:
                     end_hub = {
                         "name": end_hub[0],
@@ -351,8 +358,7 @@ class Parser:
                     raise InvalidConf(
                         "Invalid config, end_hub x/y must be integers"
                         )
-                if end_hub["x"] < 0 or end_hub["y"] < 0:
-                    raise InvalidConf("Invalid config, x & y must be positive")
+
                 seen_keys = set()
                 for i in range(len(s_brackets)):
                     if s_brackets[i][0] == "max_drones":
@@ -414,7 +420,40 @@ class Parser:
                 connection_allowed = []
                 for raw_connection, allowed_names in raw_connections:
                     cleaned = Parser.collapse_bracket_spaces(raw_connection)
-                    cleaned = cleaned.replace("-", " ")
+
+                    if "[" in cleaned:
+                        connection_part, metadata = cleaned.split("[", 1)
+
+                        if connection_part.count("-") != 1:
+                            raise InvalidConf(
+                                "Invalid config, a connection must be "
+                                "<hub1-hub2 [max_link_capacity=x]>"
+                            )
+
+                        metadata = "[" + metadata
+
+                        tags = Parser.extract_bracket_tags(
+                            metadata, "connection"
+                        )
+
+                        if len(tags) != 1:
+                            raise InvalidConf(
+                                "Invalid config, a connection must be "
+                                "<hub1-hub2 [max_link_capacity=x]>"
+                            )
+
+                        connection_part = connection_part.replace("-", " ")
+                        cleaned = connection_part + " " + tags[0]
+
+                    else:
+                        if cleaned.count("-") != 1:
+                            raise InvalidConf(
+                                "Invalid config, a connection must be "
+                                "<hub1-hub2 [max_link_capacity=x]>"
+                            )
+
+                        cleaned = cleaned.replace("-", " ")
+
                     tokens = cleaned.split()
                     clean_tokens = []
                     for token in tokens:
@@ -478,7 +517,7 @@ class Parser:
                                 "Invalid config, "
                                 "max_link_capacity must be an integer"
                                 )
-                        if link_capacity[1] < 0:
+                        if link_capacity[1] <= 0:
                             raise InvalidConf(
                                 "Invalid config, "
                                 "max_link_capacity must be positive"
@@ -493,8 +532,9 @@ class Parser:
                         connections[i] = {
                             "connection": (
                                 connections[i][0], connections[i][1]
-                                )
-                            }
+                            ),
+                            "max_link_capacity": 1
+                        }
 
                 conf_dict["nb_drones"] = nb_drones
                 conf_dict["start_hub"] = start_hub
@@ -508,5 +548,5 @@ class Parser:
         return conf_dict
 
 
-if __name__ == "__main__":
-    print(Parser.pars())
+# if __name__ == "__main__":
+#     print(Parser.pars())

@@ -4,8 +4,12 @@ from parser import Parser
 
 
 class Dijkstra:
-    configs = Parser().pars()
-    graph_dict = Graph().graph()
+    def __init__(self):
+        configs = Parser().pars()
+        if configs is None:
+            raise ValueError("Invalid configuration")
+        self.configs = configs
+        self.graph_dict = Graph().graph()
 
     def algo(self, blocked=None):
         if blocked is None:
@@ -70,4 +74,4 @@ class Dijkstra:
         return path
 
 
-print(Dijkstra().algo())
+# print(Dijkstra().algo())

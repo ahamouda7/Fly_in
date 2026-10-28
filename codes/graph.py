@@ -19,6 +19,8 @@ class Zone:
     def neighbors(self):
         neighbors_names = []
         configs = Parser().pars()
+        if configs is None:
+            raise ValueError("Invalid configuration")
         for link in configs["connections"]:
             if self.name in link["connection"]:
                 new_neighbor = (
@@ -31,7 +33,11 @@ class Zone:
 
 
 class Graph:
-    configs = Parser().pars()
+    def __init__(self):
+        configs = Parser().pars()
+        if configs is None:
+            raise ValueError("Invalid configuration")
+        self.configs = configs
 
     def hubs(self):
         hubs = []
