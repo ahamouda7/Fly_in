@@ -1,159 +1,278 @@
 
-"""Simple Pygame map for viewing Fly_in simulation turns."""
+"""Display the Fly_in graph and animate drone movements."""
 
-import math
 import pygame
 from typing import Any
 
 
 class Visualizer:
+    """Display the graph and animate drone movements."""
 
-    @staticmethod
-    def build_frames(configs: dict[str, Any], output: list[str]
-                     ) -> list[dict[int, str | tuple[str, str]]]:
-        """Get every drone's location after each simulation turn."""
-        start = configs["start_hub"]["name"]
-        drones: dict[int, str | tuple[str, str]] = {
-            i: start for i in range(1, configs["nb_drones"] + 1)
-        }
-        frames = [drones.copy()]
-
-        for turn in output:
-            for move in turn.split():
-                drone, destination = move.split("-", 1)
-                parts = destination.split("-")
-                drones[int(drone[1:])] = (
-                    (parts[0], parts[1]) if len(parts) == 2 else parts[0]
-                )
-            frames.append(drones.copy())
-
-        return frames
-
-    @staticmethod
-    def zone_color(zone: dict[str, Any]) -> tuple[int, int, int]:
-        """Use the given color, or a default when Pygame cannot read it."""
-        name = zone.get("color")
-        if name:
-            try:
-                value = pygame.Color(name)
-                return value.r, value.g, value.b
-            except ValueError:
-                pass
-        return {
-            "normal": (170, 170, 170),
-            "priority": (70, 150, 245),
-            "restricted": (245, 125, 80),
-            "blocked": (70, 70, 70),
-        }.get(zone["zone"], (170, 170, 170))
-
-    def show_visualization(self, configs: dict[str, Any],
-                           output: list[str]) -> None:
-        """Show zones, connections and drone movements, one turn at a time."""
-
+    def show_visualization(
+        self,
+        configs: dict[str, Any],
+        output: list[str]
+    ) -> None:
+        """Initialize the display, graph, drones, and Pygame window."""
         pygame.init()
-        screen = pygame.display.set_mode((1000, 700))
-        pygame.display.set_caption("Fly_in")
-        font = pygame.font.Font(None, 25)
-        small = pygame.font.Font(None, 15)
 
-        zones = [configs["start_hub"]] + configs["hubs"] + [configs["end_hub"]]
-        xs = [zone["x"] for zone in zones]
-        ys = [zone["y"] for zone in zones]
-        min_x, max_x = min(xs), max(xs)
-        min_y, max_y = min(ys), max(ys)
-        points = {
-            zone["name"]: (
-                110 + int((780 * (zone["x"] - min_x)) / max(1, max_x - min_x)),
-                130 + int((430 * (max_y - zone["y"])) / max(1, max_y - min_y)),
-            )
-            for zone in zones
-        }
-        frames = self.build_frames(configs, output)
-        end = configs["end_hub"]["name"]
-        turn = 0
+        self.zones = (
+            [configs["start_hub"]] + configs["hubs"] + [configs["end_hub"]]
+        )
+        self.zones_by_name = {zone["name"]: zone for zone in self.zones}
+        self.connections = configs["connections"]
+        self.turns = output
+        self.turn_index = 0
+        self.nb_drones = configs["nb_drones"]
+        self.screen = pygame.display.set_mode((1400, 700))
+        self.font = pygame.font.SysFont("consolas", 20)
+        pygame.display.set_caption("Fly-in")
+
+        self.clock = pygame.time.Clock()
+        self.drone_image = pygame.image.load(
+            "drone.png"
+        ).convert_alpha()
+        self.drone_image = pygame.transform.scale(
+            self.drone_image,
+            (50, 50)
+        )
+        self.progress = 0.0
+        self.speed = 0.05
+        self.drone_positions: dict[str, str] = {}
+
+        for drone_id in range(1, self.nb_drones + 1):
+            drone_name = f"D{drone_id}"
+            self.drone_positions[drone_name] = configs["start_hub"]["name"]
+
+        self.active_moves: dict[str, tuple[str, str]] = {}
+        self.camera_x = 0
+        self.camera_y = 0
+        self.dragging = False
+
+        self.run()
+
+    def to_screen(self, x: float, y: float) -> tuple[int, int]:
+        """Convert graph coordinates to screen coordinates."""
+        screen_x = int(100 + (x * 150) + self.camera_x)
+        screen_y = int(450 - (y * 150) + self.camera_y)
+        return screen_x, screen_y
+
+    def draw_zone(
+        self,
+        name: str,
+        x: int,
+        y: int
+    ) -> None:
+        """Draw a zone and its name on the screen."""
+        screen_x, screen_y = self.to_screen(x, y)
+        try:
+            name_color = self.zones_by_name[name].get("color") or "white"
+            color = pygame.Color(name_color)
+        except ValueError:
+            color = pygame.Color("white")
+        pygame.draw.circle(
+            self.screen,
+            color,
+            (screen_x, screen_y),
+            30
+        )
+
+        text = self.font.render(
+            name,
+            True,
+            "white"
+        )
+
+        text_rect = text.get_rect(
+            center=(screen_x, screen_y - 45)
+        )
+
+        self.screen.blit(
+            text,
+            text_rect
+        )
+
+    def draw_connection(
+        self,
+        zone1_name: str,
+        zone2_name: str
+    ) -> None:
+        """Draw a connection between two zones."""
+        zone1 = self.zones_by_name[zone1_name]
+        zone2 = self.zones_by_name[zone2_name]
+
+        x1, y1 = zone1["x"], zone1["y"]
+        x2, y2 = zone2["x"], zone2["y"]
+
+        pos1 = self.to_screen(x1, y1)
+        pos2 = self.to_screen(x2, y2)
+
+        pygame.draw.line(
+            self.screen,
+            "gray",
+            pos1,
+            pos2,
+            3
+        )
+
+    def draw_drone(
+        self,
+        name: str,
+        x: float,
+        y: float
+    ) -> None:
+        """Draw a drone and its name at the given position."""
+        screen_x, screen_y = self.to_screen(x, y)
+
+        rect = self.drone_image.get_rect(
+            center=(screen_x, screen_y)
+        )
+
+        self.screen.blit(
+            self.drone_image,
+            rect
+        )
+
+        text = self.font.render(
+            name,
+            True,
+            "white"
+        )
+
+        text_rect = text.get_rect(
+            center=(screen_x, screen_y + 45)
+        )
+
+        self.screen.blit(
+            text,
+            text_rect
+        )
+
+    def middle_coordinates(self, two_zones: str) -> tuple[float, float]:
+        """Find the middle point between two connected zones."""
+        if '-' in two_zones:
+            first_zone_name, second_zone_name = two_zones.split('-')
+            first_zone = self.zones_by_name[first_zone_name]
+            second_zone = self.zones_by_name[second_zone_name]
+            x1, y1 = first_zone["x"], first_zone["y"]
+            x2, y2 = second_zone["x"], second_zone["y"]
+        else:
+            raise ValueError("Expected two zone names separated by '-'")
+        return ((x1 + x2) / 2, (y1 + y2) / 2)
+
+    def run(self) -> None:
+        """Run the display loop and handle animation and user input."""
         running = True
-
-        def write(message: str, x: int, y: int, tiny: bool = False,
-                  color: tuple = (240, 240, 240)) -> None:
-            face = small if tiny else font
-            screen.blit(face.render(message, True, color), (x, y))
 
         while running:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
-                elif event.type == pygame.KEYDOWN:
-                    if event.key == pygame.K_ESCAPE:
-                        running = False
-                    elif event.key == pygame.K_RIGHT:
-                        turn = min(turn + 1, len(output))
-                    elif event.key == pygame.K_LEFT:
-                        turn = max(turn - 1, 0)
-                    elif event.key == pygame.K_r:
-                        turn = 0
 
-            screen.fill((25, 25, 30))
-            write(f"Turn {turn}/{len(output)} | Left/Right: turn | "
-                  "R: reset | Esc: quit", 20, 15)
-            movement = output[turn - 1] if turn else "start"
-            write("Movement: " + movement, 20, 45, True)
-            delivered = sum(
-                location == end for location in frames[turn].values()
-            )
-            write(f"Delivered: {delivered}/{configs['nb_drones']}", 20, 70)
+                if event.type == pygame.KEYDOWN and not self.active_moves:
+                    if event.key == pygame.K_SPACE:
+                        if self.turn_index < len(self.turns):
+                            moves = self.turns[self.turn_index].strip().split()
+                            for move in moves:
+                                drone, destination = move.split('-', 1)
 
-            for connection in configs["connections"]:
-                a, b = connection["connection"]
-                pygame.draw.line(
-                    screen, (130, 130, 130), points[a], points[b], 2
+                                self.active_moves[drone] = (
+                                    self.drone_positions[drone],
+                                    destination
+                                )
+                if (
+                    event.type == pygame.MOUSEBUTTONDOWN
+                    and event.button == 1
+                ):
+                    self.dragging = True
+                if (
+                    event.type == pygame.MOUSEBUTTONUP
+                    and event.button == 1
+                ):
+                    self.dragging = False
+                if (
+                    event.type == pygame.MOUSEMOTION
+                    and self.dragging
+                ):
+                    dx, dy = event.rel
+
+                    self.camera_x += dx
+                    self.camera_y += dy
+
+            self.screen.fill((30, 30, 30))
+
+            for connection in self.connections:
+                self.draw_connection(
+                    connection["connection"][0],
+                    connection["connection"][1]
                 )
-                x = (points[a][0] + points[b][0]) // 2
-                y = (points[a][1] + points[b][1]) // 2
-                write(str(connection["max_link_capacity"]), x + 5, y + 5, True)
 
-            for zone in zones:
-                name = zone["name"]
-                x, y = points[name]
-                pygame.draw.circle(screen, self.zone_color(zone), (x, y), 18)
-                pygame.draw.circle(screen, (0, 0, 0), (x, y), 18, 2)
-                write(name, x - 20, y + 22, True)
-                info = f"{zone['zone']} cap:{zone['max_drones']}"
-                write(info, x - 30, y + 40, True)
-                if zone.get("color"):
-                    write(f"color:{zone['color']}", x - 30, y + 56, True)
+            for zone in self.zones:
+                self.draw_zone(zone["name"], zone["x"], zone["y"])
 
-            groups: dict[str | tuple[str, str], list[int]] = {}
-            for drone_id, location in frames[turn].items():
-                groups.setdefault(location, []).append(drone_id)
-
-            for location, ids in groups.items():
-                if isinstance(location, tuple):
-                    a, b = points[location[0]], points[location[1]]
-                    x, y = (a[0] + b[0]) // 2, (a[1] + b[1]) // 2
-                else:
-                    x, y = points[location]
-                for index, drone_id in enumerate(ids):
-                    angle = 2 * math.pi * (index % 10) / min(len(ids), 10)
-                    radius = 29 + (index // 10) * 23
-                    dx = int(math.cos(angle) * radius)
-                    dy = int(math.sin(angle) * radius)
-                    drone_pos = (x + dx, y + dy)
-                    pygame.draw.circle(screen, (255, 230, 90), drone_pos, 11)
-                    pygame.draw.circle(
-                        screen,
-                        (0, 0, 0),
-                        (x + dx, y + dy),
-                        11,
-                        1
-                    )
-                    write(
-                        str(drone_id),
-                        x + dx - 6, y + dy - 7,
-                        True,
-                        (20, 20, 20)
+            for drone, zone_name in self.drone_positions.items():
+                if drone not in self.active_moves:
+                    if '-' in zone_name:
+                        x, y = self.middle_coordinates(zone_name)
+                    else:
+                        zone = self.zones_by_name[zone_name]
+                        x, y = zone["x"], zone["y"]
+                    self.draw_drone(
+                        drone,
+                        x,
+                        y
                     )
 
+            if self.active_moves:
+                for drone, movement in self.active_moves.items():
+                    start_name, end_name = movement
+
+                    start_x: float
+                    start_y: float
+                    end_x: float
+                    end_y: float
+
+                    if '-' in start_name:
+                        start_x, start_y = self.middle_coordinates(start_name)
+                        end_zone = self.zones_by_name[end_name]
+                        end_x, end_y = end_zone["x"], end_zone["y"]
+
+                    elif '-' in end_name:
+                        start_zone = self.zones_by_name[start_name]
+                        start_x, start_y = start_zone["x"], start_zone["y"]
+                        end_x, end_y = self.middle_coordinates(end_name)
+                    else:
+                        start_zone = self.zones_by_name[start_name]
+                        end_zone = self.zones_by_name[end_name]
+                        start_x, start_y = start_zone["x"], start_zone["y"]
+                        end_x, end_y = end_zone["x"], end_zone["y"]
+                    x = start_x + (end_x - start_x) * self.progress
+                    y = start_y + (end_y - start_y) * self.progress
+                    self.draw_drone(
+                        drone,
+                        x,
+                        y
+                    )
+                self.progress += self.speed
+            if self.progress >= 1.0:
+                for drone, movement in self.active_moves.items():
+                    start_name, end_name = movement
+                    self.drone_positions[drone] = end_name
+                self.active_moves.clear()
+                self.progress = 0.0
+                self.turn_index += 1
+
+            turn_text = self.font.render(
+                f"Turns: ({self.turn_index}/{len(self.turns)})",
+                True,
+                "white"
+            )
+
+            self.screen.blit(
+                turn_text,
+                (20, 20)
+            )
             pygame.display.flip()
-            pygame.time.wait(35)
+            self.clock.tick(120)
 
         pygame.quit()
