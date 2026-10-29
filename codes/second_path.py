@@ -2,7 +2,7 @@ from algorithm import Dijkstra
 
 
 class Path2:
-    def path_cost(self, path, dijkstra):
+    def path_cost(self, path: list[str], dijkstra: Dijkstra) -> int:
         cost = 0
 
         for hub in path[1:]:
@@ -10,7 +10,7 @@ class Path2:
 
         return cost
 
-    def second_path(self):
+    def second_path(self) -> list[str]:
         dijkstra = Dijkstra()
         shortest_path = dijkstra.algo()
         will_blocked = shortest_path[1:-1]

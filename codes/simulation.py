@@ -65,7 +65,7 @@ class Simulation:
 
     def prepare_path(self, path: list[str]) -> list:
         """Convert zone names to objects and add restricted connections."""
-        new_path = []
+        new_path: list[Zone | Connection] = []
 
         for i, name in enumerate(path):
             zone = self.zones[name]
@@ -97,16 +97,9 @@ class Simulation:
                 return True
             return False
 
-        max_drones = 0
-
-        for zone in self.zones.values():
-            if zone.name == zone_name:
-                max_drones = zone.max_drones
-
-        for i in hubs_size:
-            if i == zone_name:
-                if hubs_size[i] >= max_drones:
-                    return True
+        max_drones = self.zones[zone_name].max_drones
+        if hubs_size[zone_name] >= max_drones:
+            return True
 
         return False
 
@@ -128,11 +121,16 @@ class Simulation:
                 after = path[position + 3]
                 if isinstance(after, Zone) and not self.zone_is_full(
                         after.name, hubs_size):
-                    if hubs_size[dest_zone.name] > reserved.get(dest_zone.name, 0):
+                    if (
+                        hubs_size[dest_zone.name]
+                        > reserved.get(dest_zone.name, 0)
+                    ):
                         free_space = 1
 
                     for route in (self.shortest_path, self.second_path):
-                        if route != path and (dest_zone in route or after in route):
+                        if route != path and (
+                            dest_zone in route or after in route
+                        ):
                             free_space = 0
 
             link_free_space = (
@@ -269,8 +267,8 @@ class Simulation:
 
 # from algorithm import Dijkstra
 # from second_path import Path2
-# 
+#
 # path1 = Dijkstra().algo()
 # path2 = Path2().second_path()
-# 
+#
 # Simulation(path1, path2).simulation()

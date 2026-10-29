@@ -1,21 +1,22 @@
 from math import inf
+from typing import Any
 from graph import Graph
 from parser import Parser
 
 
 class Dijkstra:
-    def __init__(self):
+    def __init__(self) -> None:
         configs = Parser().pars()
         if configs is None:
             raise ValueError("Invalid configuration")
         self.configs = configs
         self.graph_dict = Graph().graph()
 
-    def algo(self, blocked=None):
+    def algo(self, blocked: str | None = None) -> list[str]:
         if blocked is None:
             blocked = ""
 
-        table = {}
+        table: dict[str, list[Any]] = {}
         start_hub_name = self.configs["start_hub"]["name"]
         goal = self.configs["end_hub"]["name"]
 

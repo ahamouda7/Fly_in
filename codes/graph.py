@@ -1,12 +1,13 @@
+from typing import Any
 from parser import Parser
 
 
 class Zone:
-    def __init__(self, name, zone_type):
+    def __init__(self, name: str, zone_type: str) -> None:
         self.name = name
         self.zone_type = zone_type
 
-    def movement_cost(self):
+    def movement_cost(self) -> int:
         if self.zone_type == "normal":
             return 1
         elif self.zone_type == "priority":
@@ -16,7 +17,7 @@ class Zone:
         else:
             return -1
 
-    def neighbors(self):
+    def neighbors(self) -> list[str]:
         neighbors_names = []
         configs = Parser().pars()
         if configs is None:
@@ -33,13 +34,13 @@ class Zone:
 
 
 class Graph:
-    def __init__(self):
+    def __init__(self) -> None:
         configs = Parser().pars()
         if configs is None:
             raise ValueError("Invalid configuration")
         self.configs = configs
 
-    def hubs(self):
+    def hubs(self) -> list[dict[str, Any]]:
         hubs = []
         for hub in self.configs:
             if hub == "start_hub" or hub == "end_hub":
@@ -49,7 +50,7 @@ class Graph:
                     hubs.append(h)
         return hubs
 
-    def graph(self):
+    def graph(self) -> dict[str, tuple[int, list[str]]]:
         graph_dict = {}
         start_name = self.configs["start_hub"]["name"]
         for hub in self.hubs():

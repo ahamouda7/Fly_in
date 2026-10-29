@@ -1,5 +1,4 @@
 from typing import Dict, Any, List, Optional
-import matplotlib.colors as color
 import sys
 
 
@@ -27,9 +26,7 @@ class Parser:
 
     @staticmethod
     def is_known_color(may_color: str) -> bool:
-        if may_color == "rainbow":
-            return True
-        return may_color in color.CSS4_COLORS
+        return bool(may_color) and not any(c.isspace() for c in may_color)
 
     @staticmethod
     def extract_bracket_tags(raw: str, where: str) -> List[str]:
@@ -51,6 +48,10 @@ class Parser:
             raise InvalidConf(
                 f"Invalid config in {where}, metadata is missing a closing ']'"
                 )
+        if raw.count("[") != 1 or raw.count("]") != 1:
+            raise InvalidConf(
+                f"Invalid config in {where}, malformed metadata brackets"
+            )
         extra = raw[close_idx + 1:].strip()
         if extra:
             raise InvalidConf(
@@ -72,6 +73,7 @@ class Parser:
 
     @staticmethod
     def pars() -> Optional[Dict[str, Any]]:
+        current_line: Optional[int] = None
         try:
             if len(sys.argv) != 2:
                 raise TokenError(
@@ -81,6 +83,9 @@ class Parser:
             with open(sys.argv[1]) as file:
                 get_conf = file.read().split("\n")
                 conf_lists = []
+                key_lines = {}
+                hub_lines = []
+                connection_lines = []
                 conf_dict: Dict[str, Any] = {
                     "nb_drones": None,
                     "start_hub": None,
@@ -89,20 +94,22 @@ class Parser:
                     "connections": []
                     }
 
-                for line in get_conf:
+                for line_number, line in enumerate(get_conf, 1):
                     if line.strip() != "" and line.strip()[0] != '#':
-                        conf_lists.append(line.split(":", 1))
+                        conf_lists.append((line_number, line.split(":", 1)))
 
                 if len(conf_lists) == 0:
                     raise InvalidConf("Invalid config, file is empty")
-                if conf_lists[0][0].lower().strip() != "nb_drones":
+                current_line = conf_lists[0][0]
+                if conf_lists[0][1][0].lower().strip() != "nb_drones":
                     raise InvalidConf(
                         "Invalid config, first line must be 'nb_drones'"
                         )
 
                 seen_singular = set()
                 declared_so_far: set = set()
-                for a_list in conf_lists:
+                for line_number, a_list in conf_lists:
+                    current_line = line_number
                     if len(a_list) == 1:
                         raise InvalidConf(
                             "Invalid config, it does not respect "
@@ -120,6 +127,7 @@ class Parser:
                                 "exactly once, found a duplicate"
                                 )
                         seen_singular.add(key)
+                        key_lines[key] = line_number
                         value = a_list[1].strip()
                         conf_dict[key] = value
                         if key in ("start_hub", "end_hub"):
@@ -127,12 +135,14 @@ class Parser:
                             if tokens:
                                 declared_so_far.add(tokens[0])
                     elif key == "hub":
+                        hub_lines.append(line_number)
                         value = a_list[1].strip()
                         conf_dict["hubs"].append(value)
                         tokens = value.split()
                         if tokens:
                             declared_so_far.add(tokens[0])
                     elif key == "connection":
+                        connection_lines.append(line_number)
                         value = a_list[1].strip()
                         conf_dict["connections"].append(
                             (value, frozenset(declared_so_far))
@@ -143,6 +153,7 @@ class Parser:
                             "is not a key"
                             )
 
+                current_line = None
                 required_keys = ["nb_drones", "start_hub", "end_hub"]
                 for k in required_keys:
                     if conf_dict[k] is None:
@@ -154,6 +165,7 @@ class Parser:
                 end_hub = conf_dict["end_hub"]
                 connections = conf_dict["connections"]
 
+                current_line = key_lines["nb_drones"]
                 try:
                     nb_drones = conf_dict["nb_drones"] = int(nb_drones)
                 except ValueError:
@@ -165,12 +177,13 @@ class Parser:
                         "Invalid config, nb_drones must be positive"
                         )
 
-                start_hub = start_hub.split(" ", 3)
-                end_hub = end_hub.split(" ", 3)
+                start_hub = start_hub.split(maxsplit=3)
+                end_hub = end_hub.split(maxsplit=3)
 
                 for i in range(len(hubs)):
-                    hubs[i] = hubs[i].split(" ", 3)
+                    hubs[i] = hubs[i].split(maxsplit=3)
 
+                current_line = key_lines["start_hub"]
                 if len(start_hub) < 3:
                     raise InvalidConf(
                         "Invalid config, start_hub must have <name x y>"
@@ -240,6 +253,13 @@ class Parser:
                     start_hub["zone"] = "normal"
 
                 for i in range(len(hubs)):
+                    current_line = hub_lines[i]
+                    if len(hubs[i]) < 3:
+                        hub_name = hubs[i][0] if hubs[i] else ""
+                        raise InvalidConf(
+                            f"Invalid config, hub '{hub_name}' is missing "
+                            "its x or y coordinate"
+                            )
                     if "-" in hubs[i][0]:
                         raise InvalidConf(
                             f"Invalid config, hub name '{hubs[i][0]}' "
@@ -258,11 +278,6 @@ class Parser:
                                 "metadata must be 'key=value'"
                             )
                         s_brackets.append(parts)
-                    if len(hubs[i]) < 3:
-                        raise InvalidConf(
-                            f"Invalid config, hub '{hubs[i][0]}' is missing "
-                            "its x or y coordinate"
-                            )
                     try:
                         hub_x = int(hubs[i][1])
                         hub_y = int(hubs[i][2])
@@ -329,6 +344,7 @@ class Parser:
                     if "max_drones" not in hubs[i]:
                         hubs[i]["max_drones"] = 1
 
+                current_line = key_lines["end_hub"]
                 if len(end_hub) < 3:
                     raise InvalidConf(
                         "Invalid config, end_hub must have <name x y>"
@@ -399,7 +415,13 @@ class Parser:
                     )
                 seen_names = set()
                 seen_coords: Dict[Any, str] = {}
-                for zone in all_zones:
+                zone_lines = (
+                    [key_lines["start_hub"]]
+                    + hub_lines
+                    + [key_lines["end_hub"]]
+                )
+                for i, zone in enumerate(all_zones):
+                    current_line = zone_lines[i]
                     name = zone["name"]
                     coords = (zone["x"], zone["y"])
                     if name in seen_names:
@@ -418,11 +440,19 @@ class Parser:
                 raw_connections = connections
                 connections = []
                 connection_allowed = []
-                for raw_connection, allowed_names in raw_connections:
+                for i, (raw_connection, allowed_names) in enumerate(
+                    raw_connections
+                ):
+                    current_line = connection_lines[i]
                     cleaned = Parser.collapse_bracket_spaces(raw_connection)
 
                     if "[" in cleaned:
                         connection_part, metadata = cleaned.split("[", 1)
+
+                        if "]" in connection_part:
+                            raise InvalidConf(
+                                "Invalid config, unexpected ']' in connection"
+                            )
 
                         if connection_part.count("-") != 1:
                             raise InvalidConf(
@@ -446,6 +476,11 @@ class Parser:
                         cleaned = connection_part + " " + tags[0]
 
                     else:
+                        if "]" in cleaned:
+                            raise InvalidConf(
+                                "Invalid config, unexpected ']' in connection"
+                            )
+
                         if cleaned.count("-") != 1:
                             raise InvalidConf(
                                 "Invalid config, a connection must be "
@@ -463,6 +498,7 @@ class Parser:
 
                 seen_connections = set()
                 for i in range(len(connections)):
+                    current_line = connection_lines[i]
                     if len(connections[i]) != 2 and len(connections[i]) != 3:
                         raise InvalidConf(
                             "Invalid config, a connection must be "
@@ -542,8 +578,9 @@ class Parser:
                 conf_dict["hubs"] = hubs
                 conf_dict["connections"] = connections
         except Exception as e:
-            print(f"ERROR: {e}")
-            return None
+            line = f"Line {current_line}: " if current_line is not None else ""
+            print(f"ERROR: {line}{e}", file=sys.stderr)
+            sys.exit(1)
 
         return conf_dict
 
