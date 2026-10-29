@@ -31,7 +31,7 @@ class Visualizer:
         self.clock = pygame.time.Clock()
         self.drone_image = pygame.image.load(
             "drone.png"
-        ).convert_alpha()
+        )
         self.drone_image = pygame.transform.scale(
             self.drone_image,
             (50, 50)
