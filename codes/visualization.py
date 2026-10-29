@@ -8,49 +8,6 @@ from typing import Any
 class Visualizer:
     """Display the graph and animate drone movements."""
 
-    def show_visualization(
-        self,
-        configs: dict[str, Any],
-        output: list[str]
-    ) -> None:
-        """Initialize the display, graph, drones, and Pygame window."""
-        pygame.init()
-
-        self.zones = (
-            [configs["start_hub"]] + configs["hubs"] + [configs["end_hub"]]
-        )
-        self.zones_by_name = {zone["name"]: zone for zone in self.zones}
-        self.connections = configs["connections"]
-        self.turns = output
-        self.turn_index = 0
-        self.nb_drones = configs["nb_drones"]
-        self.screen = pygame.display.set_mode((3000, 1500))
-        self.font = pygame.font.SysFont("consolas", 30)
-        pygame.display.set_caption("Fly-in")
-
-        self.clock = pygame.time.Clock()
-        self.drone_image = pygame.image.load(
-            "drone.png"
-        )
-        self.drone_image = pygame.transform.scale(
-            self.drone_image,
-            (80, 80)
-        )
-        self.progress = 0.0
-        self.speed = 0.05
-        self.drone_positions: dict[str, str] = {}
-
-        for drone_id in range(1, self.nb_drones + 1):
-            drone_name = f"D{drone_id}"
-            self.drone_positions[drone_name] = configs["start_hub"]["name"]
-
-        self.active_moves: dict[str, tuple[str, str]] = {}
-        self.camera_x = 0
-        self.camera_y = 0
-        self.dragging = False
-
-        self.run()
-
     def to_screen(self, x: float, y: float) -> tuple[int, int]:
         """Convert graph coordinates to screen coordinates."""
         screen_x = int(200 + (x * 250) + self.camera_x)
@@ -136,11 +93,11 @@ class Visualizer:
         text = self.font.render(
             name,
             True,
-            "white"
+            "gray"
         )
 
         text_rect = text.get_rect(
-            center=(screen_x, screen_y + 45)
+            center=(screen_x, screen_y + 30)
         )
 
         self.screen.blit(
@@ -276,3 +233,46 @@ class Visualizer:
             self.clock.tick(120)
 
         pygame.quit()
+
+    def show_visualization(
+        self,
+        configs: dict[str, Any],
+        output: list[str]
+    ) -> None:
+        """Initialize the display, graph, drones, and Pygame window."""
+        pygame.init()
+
+        self.zones = (
+            [configs["start_hub"]] + configs["hubs"] + [configs["end_hub"]]
+        )
+        self.zones_by_name = {zone["name"]: zone for zone in self.zones}
+        self.connections = configs["connections"]
+        self.turns = output
+        self.turn_index = 0
+        self.nb_drones = configs["nb_drones"]
+        self.screen = pygame.display.set_mode((3000, 1500))
+        self.font = pygame.font.SysFont("consolas", 30)
+        pygame.display.set_caption("Fly-in")
+
+        self.clock = pygame.time.Clock()
+        self.drone_image = pygame.image.load(
+            "drone.png"
+        )
+        self.drone_image = pygame.transform.scale(
+            self.drone_image,
+            (80, 80)
+        )
+        self.progress = 0.0
+        self.speed = 0.05
+        self.drone_positions: dict[str, str] = {}
+
+        for drone_id in range(1, self.nb_drones + 1):
+            drone_name = f"D{drone_id}"
+            self.drone_positions[drone_name] = configs["start_hub"]["name"]
+
+        self.active_moves: dict[str, tuple[str, str]] = {}
+        self.camera_x = 0
+        self.camera_y = 0
+        self.dragging = False
+
+        self.run()
