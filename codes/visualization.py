@@ -2,6 +2,7 @@
 """Simple Pygame map for viewing Fly_in simulation turns."""
 
 import math
+import pygame
 from typing import Any
 
 
@@ -28,16 +29,32 @@ class Visualizer:
 
         return frames
 
+    @staticmethod
+    def zone_color(zone: dict[str, Any]) -> tuple[int, int, int]:
+        """Use the given color, or a default when Pygame cannot read it."""
+        name = zone.get("color")
+        if name:
+            try:
+                value = pygame.Color(name)
+                return value.r, value.g, value.b
+            except ValueError:
+                pass
+        return {
+            "normal": (170, 170, 170),
+            "priority": (70, 150, 245),
+            "restricted": (245, 125, 80),
+            "blocked": (70, 70, 70),
+        }.get(zone["zone"], (170, 170, 170))
+
     def show_visualization(self, configs: dict[str, Any],
                            output: list[str]) -> None:
         """Show zones, connections and drone movements, one turn at a time."""
-        import pygame
 
         pygame.init()
         screen = pygame.display.set_mode((1000, 700))
         pygame.display.set_caption("Fly_in")
-        font = pygame.font.Font(None, 23)
-        small = pygame.font.Font(None, 18)
+        font = pygame.font.Font(None, 25)
+        small = pygame.font.Font(None, 15)
 
         zones = [configs["start_hub"]] + configs["hubs"] + [configs["end_hub"]]
         xs = [zone["x"] for zone in zones]
@@ -46,8 +63,8 @@ class Visualizer:
         min_y, max_y = min(ys), max(ys)
         points = {
             zone["name"]: (
-                110 + int(780 * (zone["x"] - min_x) / max(1, max_x - min_x)),
-                130 + int(430 * (max_y - zone["y"]) / max(1, max_y - min_y)),
+                110 + int((780 * (zone["x"] - min_x)) / max(1, max_x - min_x)),
+                130 + int((430 * (max_y - zone["y"])) / max(1, max_y - min_y)),
             )
             for zone in zones
         }
@@ -60,22 +77,6 @@ class Visualizer:
                   color: tuple = (240, 240, 240)) -> None:
             face = small if tiny else font
             screen.blit(face.render(message, True, color), (x, y))
-
-        def zone_color(zone: dict[str, Any]) -> tuple[int, int, int]:
-            """Use the given color, or a default when Pygame cannot read it."""
-            name = zone.get("color")
-            if name:
-                try:
-                    value = pygame.Color(name)
-                    return value.r, value.g, value.b
-                except ValueError:
-                    pass
-            return {
-                "normal": (170, 170, 170),
-                "priority": (70, 150, 245),
-                "restricted": (245, 125, 80),
-                "blocked": (70, 70, 70),
-            }.get(zone["zone"], (170, 170, 170))
 
         while running:
             for event in pygame.event.get():
@@ -101,7 +102,6 @@ class Visualizer:
             )
             write(f"Delivered: {delivered}/{configs['nb_drones']}", 20, 70)
 
-            # Draw connections before zones.
             for connection in configs["connections"]:
                 a, b = connection["connection"]
                 pygame.draw.line(
@@ -114,7 +114,7 @@ class Visualizer:
             for zone in zones:
                 name = zone["name"]
                 x, y = points[name]
-                pygame.draw.circle(screen, zone_color(zone), (x, y), 18)
+                pygame.draw.circle(screen, self.zone_color(zone), (x, y), 18)
                 pygame.draw.circle(screen, (0, 0, 0), (x, y), 18, 2)
                 write(name, x - 20, y + 22, True)
                 info = f"{zone['zone']} cap:{zone['max_drones']}"
@@ -122,7 +122,6 @@ class Visualizer:
                 if zone.get("color"):
                     write(f"color:{zone['color']}", x - 30, y + 56, True)
 
-            # Draw drones at zones, or in the middle of restricted-zone links.
             groups: dict[str | tuple[str, str], list[int]] = {}
             for drone_id, location in frames[turn].items():
                 groups.setdefault(location, []).append(drone_id)

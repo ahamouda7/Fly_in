@@ -173,7 +173,7 @@ class Simulation:
 
         return drones
 
-    def simulation(self) -> tuple[list[str], list[Drone]]:
+    def simulation(self) -> list[str]:
         """Simulate drone movements and return the output."""
         drones = self.set_paths_for_drones()
 
@@ -262,7 +262,7 @@ class Simulation:
 
             output.append(turn.strip())
 
-        return output, drones
+        return output
 
 
 # from algorithm import Dijkstra

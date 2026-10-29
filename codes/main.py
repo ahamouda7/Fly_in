@@ -1,7 +1,6 @@
 """Entry point for the Fly_in project."""
 
 import sys
-
 from algorithm import Dijkstra
 from parser import Parser
 from second_path import Path2
@@ -13,9 +12,6 @@ class Main:
     @staticmethod
     def main() -> None:
         """Parse the map, find paths, simulate drones, and show the results."""
-        if len(sys.argv) != 2:
-            print("Usage: python main.py <map.txt>", file=sys.stderr)
-            sys.exit(1)
 
         configs = Parser().pars()
         if configs is None:
@@ -28,27 +24,27 @@ class Main:
 
         second_path = Path2().second_path()
         if not second_path:
-            # A map can have only one valid path.
             second_path = shortest_path
 
-        print("Shortest path:", " -> ".join(shortest_path))
+        print("\nShortest path:", " -> ".join(shortest_path))
         print("Second path:", " -> ".join(second_path))
 
-        simulation = Simulation(shortest_path, second_path)
-        output, _drones = simulation.simulation()
+        simulation1 = Simulation(shortest_path, second_path)
+        output1 = simulation1.simulation()
+
+        simulation2 = Simulation(shortest_path, shortest_path)
+        output2 = simulation2.simulation()
+
+        if len(output1) > len(output2):
+            output = output2
+        else:
+            output = output1
 
         print("\nSimulation:")
         for turn in output:
             print(turn)
 
-        try:
-            Visualizer().show_visualization(configs, output)
-        except ImportError as error:
-            if error.name != "pygame":
-                raise
-            print("\nPygame is missing. Install it with: pip install pygame",
-                  file=sys.stderr)
-            sys.exit(1)
+        Visualizer().show_visualization(configs, output)
 
 
 if __name__ == "__main__":
