@@ -24,8 +24,8 @@ class Visualizer:
         self.turns = output
         self.turn_index = 0
         self.nb_drones = configs["nb_drones"]
-        self.screen = pygame.display.set_mode((1400, 700))
-        self.font = pygame.font.SysFont("consolas", 20)
+        self.screen = pygame.display.set_mode((3000, 1500))
+        self.font = pygame.font.SysFont("consolas", 30)
         pygame.display.set_caption("Fly-in")
 
         self.clock = pygame.time.Clock()
@@ -34,7 +34,7 @@ class Visualizer:
         )
         self.drone_image = pygame.transform.scale(
             self.drone_image,
-            (50, 50)
+            (80, 80)
         )
         self.progress = 0.0
         self.speed = 0.05
@@ -53,8 +53,8 @@ class Visualizer:
 
     def to_screen(self, x: float, y: float) -> tuple[int, int]:
         """Convert graph coordinates to screen coordinates."""
-        screen_x = int(100 + (x * 150) + self.camera_x)
-        screen_y = int(450 - (y * 150) + self.camera_y)
+        screen_x = int(200 + (x * 250) + self.camera_x)
+        screen_y = int(550 - (y * 250) + self.camera_y)
         return screen_x, screen_y
 
     def draw_zone(
@@ -74,7 +74,7 @@ class Visualizer:
             self.screen,
             color,
             (screen_x, screen_y),
-            30
+            50
         )
 
         text = self.font.render(
@@ -84,7 +84,7 @@ class Visualizer:
         )
 
         text_rect = text.get_rect(
-            center=(screen_x, screen_y - 45)
+            center=(screen_x, screen_y - 80)
         )
 
         self.screen.blit(
