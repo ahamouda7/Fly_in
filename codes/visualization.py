@@ -178,6 +178,10 @@ class Visualizer:
             "gray"
         )
 
+        for drone, position in self.drone_positions.items():
+            if drone != id and position == self.drone_positions[id]:
+                text = self.font.render("", True, "gray")
+
         text_rect = text.get_rect(
             center=(screen_x, screen_y + 30)
         )
