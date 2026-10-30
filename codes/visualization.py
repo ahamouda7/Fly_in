@@ -8,10 +8,55 @@ from typing import Any
 class Visualizer:
     """Display the graph and animate drone movements."""
 
+    def show_visualization(
+        self,
+        configs: dict[str, Any],
+        output: list[str]
+    ) -> None:
+        """Initialize the display, graph, drones, and Pygame window."""
+        pygame.init()
+
+        self.zones = (
+            [configs["start_hub"]] + configs["hubs"] + [configs["end_hub"]]
+        )
+        self.zones_by_name = {zone["name"]: zone for zone in self.zones}
+        self.connections = configs["connections"]
+        self.turns = output
+        self.turn_index = 0
+        self.nb_drones = configs["nb_drones"]
+
+        # 1337 Mac display dimentions: (3000, 1500)
+        # My Windows laptop display dimentions: (1400, 700)
+        self.screen = pygame.display.set_mode((1400, 700))
+
+        self.font = pygame.font.SysFont("consolas", 30)
+        pygame.display.set_caption("Fly-in")
+
+        self.clock = pygame.time.Clock()
+        self.drone_image = pygame.image.load("drone.png")
+        self.drone_image = pygame.transform.scale(
+            self.drone_image,
+            (80, 80)
+        )
+        self.progress = 0.0
+        self.speed = 0.05
+        self.drone_positions: dict[str, str] = {}
+
+        for drone_id in range(1, self.nb_drones + 1):
+            drone_name = f"D{drone_id}"
+            self.drone_positions[drone_name] = configs["start_hub"]["name"]
+
+        self.active_moves: dict[str, tuple[str, str]] = {}
+        self.camera_x = 0
+        self.camera_y = 0
+        self.dragging = False
+
+        self.run()
+
     def to_screen(self, x: float, y: float) -> tuple[int, int]:
         """Convert graph coordinates to screen coordinates."""
         screen_x = int(200 + (x * 250) + self.camera_x)
-        screen_y = int(550 - (y * 250) + self.camera_y)
+        screen_y = int(300 - (y * 250) + self.camera_y)
         return screen_x, screen_y
 
     def draw_zone(
@@ -23,10 +68,10 @@ class Visualizer:
         """Draw a zone and its name on the screen."""
         screen_x, screen_y = self.to_screen(x, y)
         try:
-            name_color = self.zones_by_name[name].get("color") or "white"
+            name_color = self.zones_by_name[name].get("color") or "blue"
             color = pygame.Color(name_color)
         except ValueError:
-            color = pygame.Color("white")
+            color = pygame.Color("blue")
         pygame.draw.circle(
             self.screen,
             color,
@@ -52,7 +97,8 @@ class Visualizer:
     def draw_connection(
         self,
         zone1_name: str,
-        zone2_name: str
+        zone2_name: str,
+        connection_type: str
     ) -> None:
         """Draw a connection between two zones."""
         zone1 = self.zones_by_name[zone1_name]
@@ -61,20 +107,56 @@ class Visualizer:
         x1, y1 = zone1["x"], zone1["y"]
         x2, y2 = zone2["x"], zone2["y"]
 
-        pos1 = self.to_screen(x1, y1)
-        pos2 = self.to_screen(x2, y2)
+        screen_x1, screen_y1 = self.to_screen(x1, y1)
+        screen_x2, screen_y2 = self.to_screen(x2, y2)
 
         pygame.draw.line(
             self.screen,
             "gray",
-            pos1,
-            pos2,
-            3
+            (screen_x1, screen_y1),
+            (screen_x2, screen_y2),
+            2
         )
+
+        middle_x = (screen_x1 + screen_x2) / 2
+        middle_y = (screen_y1 + screen_y2) / 2
+        if (
+            connection_type == "normal"
+            or connection_type == "priority"
+        ):
+            text = self.font.render(
+                "1",
+                True,
+                "white"
+            )
+
+            text_rect = text.get_rect(
+                center=(middle_x, middle_y)
+            )
+
+            self.screen.blit(
+                text,
+                text_rect
+            )
+        elif connection_type == "restricted":
+            text = self.font.render(
+                "2",
+                True,
+                "white"
+            )
+
+            text_rect = text.get_rect(
+                center=(middle_x, middle_y)
+            )
+
+            self.screen.blit(
+                text,
+                text_rect
+            )
 
     def draw_drone(
         self,
-        name: str,
+        id: str,
         x: float,
         y: float
     ) -> None:
@@ -91,7 +173,7 @@ class Visualizer:
         )
 
         text = self.font.render(
-            name,
+            id,
             True,
             "gray"
         )
@@ -161,7 +243,10 @@ class Visualizer:
             for connection in self.connections:
                 self.draw_connection(
                     connection["connection"][0],
-                    connection["connection"][1]
+                    connection["connection"][1],
+                    connection_type=(
+                        self.zones_by_name[connection["connection"][1]]["zone"]
+                    )
                 )
 
             for zone in self.zones:
@@ -233,46 +318,3 @@ class Visualizer:
             self.clock.tick(120)
 
         pygame.quit()
-
-    def show_visualization(
-        self,
-        configs: dict[str, Any],
-        output: list[str]
-    ) -> None:
-        """Initialize the display, graph, drones, and Pygame window."""
-        pygame.init()
-
-        self.zones = (
-            [configs["start_hub"]] + configs["hubs"] + [configs["end_hub"]]
-        )
-        self.zones_by_name = {zone["name"]: zone for zone in self.zones}
-        self.connections = configs["connections"]
-        self.turns = output
-        self.turn_index = 0
-        self.nb_drones = configs["nb_drones"]
-        self.screen = pygame.display.set_mode((3000, 1500))
-        self.font = pygame.font.SysFont("consolas", 30)
-        pygame.display.set_caption("Fly-in")
-
-        self.clock = pygame.time.Clock()
-        self.drone_image = pygame.image.load(
-            "drone.png"
-        )
-        self.drone_image = pygame.transform.scale(
-            self.drone_image,
-            (80, 80)
-        )
-        self.progress = 0.0
-        self.speed = 0.05
-        self.drone_positions: dict[str, str] = {}
-
-        for drone_id in range(1, self.nb_drones + 1):
-            drone_name = f"D{drone_id}"
-            self.drone_positions[drone_name] = configs["start_hub"]["name"]
-
-        self.active_moves: dict[str, tuple[str, str]] = {}
-        self.camera_x = 0
-        self.camera_y = 0
-        self.dragging = False
-
-        self.run()
