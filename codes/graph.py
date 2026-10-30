@@ -1,13 +1,20 @@
+
+"""Build a graph of zones, movement costs, and connections."""
+
 from typing import Any
 from parser import Parser
 
 
 class Zone:
+    """Represent a zone with its movement cost and neighboring zones."""
+
     def __init__(self, name: str, zone_type: str) -> None:
+        """Initialize the zone's name and type."""
         self.name = name
         self.zone_type = zone_type
 
     def movement_cost(self) -> int:
+        """Return the movement cost based on the zone type."""
         if self.zone_type == "normal":
             return 1
         elif self.zone_type == "priority":
@@ -18,6 +25,7 @@ class Zone:
             return -1
 
     def neighbors(self) -> list[str]:
+        """Return the names of all zones connected to this zone."""
         neighbors_names = []
         configs = Parser().pars()
         if configs is None:
@@ -34,13 +42,17 @@ class Zone:
 
 
 class Graph:
+    """Build a graph containing each zone's cost and neighbors."""
+
     def __init__(self) -> None:
+        """Load and store the map configuration."""
         configs = Parser().pars()
         if configs is None:
             raise ValueError("Invalid configuration")
         self.configs = configs
 
     def hubs(self) -> list[dict[str, Any]]:
+        """Return all hubs, including the start and end hubs."""
         hubs = []
         for hub in self.configs:
             if hub == "start_hub" or hub == "end_hub":
@@ -51,6 +63,7 @@ class Graph:
         return hubs
 
     def graph(self) -> dict[str, tuple[int, list[str]]]:
+        """Build a dictionary mapping each zone to its cost and neighbors."""
         graph_dict = {}
         start_name = self.configs["start_hub"]["name"]
         for hub in self.hubs():

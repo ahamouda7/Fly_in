@@ -1,22 +1,31 @@
+
+"""Read and validate Fly_in map files."""
+
 from typing import Dict, Any, List, Optional
 import sys
 
 
 class TokenError(Exception):
+    """Report invalid command-line arguments."""
     pass
 
 
 class InvalidConf(Exception):
+    """Report an invalid map configuration."""
     pass
 
 
 class MissingConf(Exception):
+    """Report a missing required configuration field."""
     pass
 
 
 class Parser:
+    """Parse a map file and validate its zones and connections."""
+
     @staticmethod
     def comment_index(s: str) -> int:
+        """Return the position of the first comment marker, or -1."""
         i = 0
         for c in s:
             if c == '#':
@@ -26,6 +35,7 @@ class Parser:
 
     @staticmethod
     def is_known_color(may_color: str) -> bool:
+        """Check that a color name is nonempty and contains no spaces."""
         return bool(may_color) and not any(c.isspace() for c in may_color)
 
     @staticmethod
@@ -73,6 +83,10 @@ class Parser:
 
     @staticmethod
     def pars() -> Optional[Dict[str, Any]]:
+        """Read the given map file and return its validated configuration.
+
+        Report invalid input to stderr and exit with status 1.
+        """
         current_line: Optional[int] = None
         try:
             if len(sys.argv) != 2:
@@ -583,7 +597,3 @@ class Parser:
             sys.exit(1)
 
         return conf_dict
-
-
-# if __name__ == "__main__":
-#     print(Parser.pars())

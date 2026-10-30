@@ -18,34 +18,36 @@ Regular zones have a maximum drone capacity, and connections have a maximum numb
 
 ## Instructions
 
-You need Python 3.10 or newer and Pygame.
+You need Python 3.10 or newer, `make`, and [uv](https://docs.astral.sh/uv/).
 
-Install Pygame in your Python environment:
-
-```bash
-python -m pip install pygame
-```
-
-Run the project by passing the path to a map file:
+Install the dependencies:
 
 ```bash
-python codes/main.py maps/medium/03_priority_puzzle.txt
+make install
 ```
 
-On Windows, you can use `py` instead of `python`:
+Run the project:
 
 ```bash
-py codes/main.py maps/medium/03_priority_puzzle.txt
+make run
 ```
 
-To check your code with the tools used during development:
+To run with another map:
 
 ```bash
-flake8 codes/
-mypy codes/
+make run MAP=maps/easy/01_linear_path.txt
 ```
 
-The program prints the selected paths and simulation turns in the terminal, then opens the Pygame window.
+Other useful commands:
+
+```bash
+make lint    # Check the code with flake8 and mypy
+make clean   # Remove Python cache files
+make debug   # Run the project with the Python debugger
+```
+
+The program prints the shortest path, second path, and simulation turns
+in the terminal before opening the Pygame visualization.
 
 ## How It Works
 
@@ -54,7 +56,7 @@ The program prints the selected paths and simulation turns in the terminal, then
 3. **Dijkstra:** Finds a lowest-cost path from the start to the end, avoiding blocked zones.
 4. **Second path:** Tries blocking each intermediate hub in the first path, reruns Dijkstra, and keeps the cheapest alternative found.
 5. **Simulation:** Assigns drones alternately to the first and second paths, checks zone and connection capacities, and records each turn. If no second path is found, both groups use the first path.
-6. **Visualization:** Reconstructs drone positions from the simulation output and displays the map at the selected turn.
+6. **Visualization:** Reads the simulation output and animates drone movements between zones, one turn at a time, using Pygame.
 
 Drones sometimes have to wait for capacity to become available. A drone entering a restricted zone passes through an additional connection stage before arriving at that zone.
 
@@ -75,16 +77,23 @@ During the simulation, each drone tries to advance one stage per turn. The progr
 
 ## Visualisation
 
-The project uses **Pygame** to display the simulation on a dark background.
+The project uses **Pygame** to display the map and animate drone movements on a dark background.
 
-- **Right arrow:** Show the next turn.
-- **Left arrow:** Return to the previous turn.
-- **R:** Reset to turn 0.
-- **Esc** or the window close button: Exit the visualization.
+Controls:
+- **Space:** Start the animation of the next turn.
+- **Left mouse button + drag:** Move the map around the window.
+- **Close the window:** Exit the visualization.
 
-Zones are drawn as colored circles with their names, types, and capacities. Connections are drawn as lines with capacity labels. Drones are shown as yellow circles with their ID numbers. The window also displays the current turn, its movements, and the number of drones delivered.
+Zones are displayed as colored circles with their names above them.
+Connections are represented by gray lines, and drones are displayed as images
+with their IDs.
 
-If a configured color name is not supported by Pygame, the visualization uses a default color based on the zone type.
+When Space is pressed, all drone movements recorded for the next simulation turn are animated simultaneously.
+Drones move between connected zones, while drones entering restricted zones pass through the midpoint of the connection.
+
+The window displays the current turn and the total number of turns.
+
+If a zone has an invalid or unspecified color, white is used by default.
 
 ## Example
 
@@ -122,6 +131,7 @@ Each simulation line represents one turn. For example, `D1-middle` means drone 1
 - `codes/simulation.py`: Assigns routes to drones and simulates their movements.
 - `codes/visualization.py`: Displays the map and drone movements using Pygame.
 - `maps/`: Contains example and test map files.
+- `drone.png`: Image used to represent drones in the Pygame visualization.
 
 ## Resources
 

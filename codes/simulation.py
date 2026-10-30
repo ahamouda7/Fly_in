@@ -1,32 +1,44 @@
 
+"""Simulate drone movements while respecting zone and connection capacities."""
+
 from parser import Parser
 
 
 class Zone:
+    """Represent a zone with its type and maximum drone capacity."""
+
     def __init__(self, data: dict):
+        """Initialize the zone using its configuration data."""
         self.name = data["name"]
         self.zone_type = data["zone"]
         self.max_drones = data["max_drones"]
 
 
 class Connection:
+    """Represent a connection between two zones with a capacity limit."""
+
     def __init__(self, data: dict):
+        """Initialize the connection using its configuration data."""
         self.zone1 = data["connection"][0]
         self.zone2 = data["connection"][1]
         self.max_link_capacity = data["max_link_capacity"]
 
 
 class Drone:
+    """Represent a drone with an ID, assigned path, and current position."""
+
     def __init__(self, drone_id: int, path: list, position: int):
+        """Initialize the drone's ID, path, and position."""
         self.id = drone_id
         self.path = path
         self.position = position
 
 
 class Simulation:
-    """This class is used to simulate the movements of the drones."""
+    """Simulate drone movements while respecting movement constraints."""
 
     def __init__(self, shortest_path: list[str], second_path: list[str]):
+        """Load the map and prepare the two paths for simulation."""
         configs = Parser().pars()
 
         if configs is None:
@@ -53,12 +65,6 @@ class Simulation:
 
         for data in configs["connections"]:
             self.connections.append(Connection(data))
-
-#         if not shortest_path:
-#             raise ValueError("No path from start to end")
-#
-#         if not second_path:
-#             second_path = shortest_path
 
         self.shortest_path = self.prepare_path(shortest_path)
         self.second_path = self.prepare_path(second_path)
@@ -91,7 +97,7 @@ class Simulation:
 
     def zone_is_full(self, zone_name: str | Connection,
                      hubs_size: dict) -> bool:
-        """This function checks if the zone is full or not."""
+        """Check whether a zone or connection has reached its capacity."""
         if isinstance(zone_name, Connection):
             if hubs_size[zone_name] >= zone_name.max_link_capacity:
                 return True
@@ -105,7 +111,7 @@ class Simulation:
 
     def can_move(self, path: list, position: int,
                  hubs_size: dict, used: dict, reserved: dict) -> bool:
-        """This function checks if the drone can move to its next zone."""
+        """Check whether a drone can advance to its next path stage."""
         current_stage = path[position]
         next_stage = path[position + 1]
 
@@ -162,7 +168,7 @@ class Simulation:
         return False
 
     def set_paths_for_drones(self) -> list[Drone]:
-        """This function sets the path for every drone."""
+        """Assign drones alternately to the shortest and second paths."""
         drones = []
 
         for i in range(self.nb_drones):
@@ -174,22 +180,12 @@ class Simulation:
         return drones
 
     def simulation(self) -> list[str]:
-        """Simulate drone movements and return the output."""
-        drones = self.set_paths_for_drones()
+        """Simulate turns until all drones reach the end hub.
 
-        # for drone in drones:
-        #     print(
-        #         [
-        #         drone.id,
-        #         [
-        #             z.name
-        #             if isinstance(z, Zone)
-        #             else f"{z.zone1}-{z.zone2}"
-        #             for z in drone.path
-        #         ],
-        #         drone.position
-        #         ]
-        #     )
+        Returns:
+            A list of strings containing drone movements for each turn.
+        """
+        drones = self.set_paths_for_drones()
 
         hubs_size: dict[str | Connection, int] = {}
 
@@ -201,12 +197,6 @@ class Simulation:
 
         for connection in self.connections:
             hubs_size[connection] = 0
-
-        # for i in hubs_size:
-        #     if isinstance(i, Connection):
-        #         print(f"{i.zone1}-{i.zone2}: {hubs_size[i]}")
-        #     else:
-        #         print(f"{i}: {hubs_size[i]}")
 
         output = []
 
@@ -263,12 +253,3 @@ class Simulation:
             output.append(turn.strip())
 
         return output
-
-
-# from algorithm import Dijkstra
-# from second_path import Path2
-#
-# path1 = Dijkstra().algo()
-# path2 = Path2().second_path()
-#
-# Simulation(path1, path2).simulation()

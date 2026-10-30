@@ -1,3 +1,6 @@
+
+"""Find the shortest path between two hubs using Dijkstra's algorithm."""
+
 from math import inf
 from typing import Any
 from graph import Graph
@@ -5,7 +8,10 @@ from parser import Parser
 
 
 class Dijkstra:
+    """Find the lowest-cost path through the graph."""
+
     def __init__(self) -> None:
+        """Load the map configuration and build the graph."""
         configs = Parser().pars()
         if configs is None:
             raise ValueError("Invalid configuration")
@@ -13,6 +19,15 @@ class Dijkstra:
         self.graph_dict = Graph().graph()
 
     def algo(self, blocked: str | None = None) -> list[str]:
+        """Find the shortest path while optionally avoiding one hub.
+
+        Args:
+            blocked: Name of a hub to exclude from the search.
+
+        Returns:
+            A list of hub names forming the shortest path,
+            or an empty list if no path is found.
+        """
         if blocked is None:
             blocked = ""
 
@@ -73,6 +88,3 @@ class Dijkstra:
         path.reverse()
 
         return path
-
-
-# print(Dijkstra().algo())

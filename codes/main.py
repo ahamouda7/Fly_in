@@ -1,4 +1,5 @@
-"""Entry point for the Fly_in project."""
+
+"""Run the Fly_in project from map parsing to visualization."""
 
 import sys
 from algorithm import Dijkstra
@@ -9,9 +10,11 @@ from visualization import Visualizer
 
 
 class Main:
+    """Manage the pathfinding, simulation, and visualization process."""
+
     @staticmethod
     def main() -> None:
-        """Parse the map, find paths, simulate drones, and show the results."""
+        """Find two paths, compare simulations, and display the best result."""
 
         configs = Parser().pars()
         if configs is None:
