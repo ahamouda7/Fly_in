@@ -25,7 +25,7 @@ class Visualizer:
         self.turn_index = 0
         self.nb_drones = configs["nb_drones"]
 
-        self.screen = pygame.display.set_mode((3000, 1500))
+        self.screen = pygame.display.set_mode((1500, 700))
 
         self.font = pygame.font.SysFont("consolas", 30)
         pygame.display.set_caption("Fly-in")
@@ -203,7 +203,6 @@ class Visualizer:
             raise ValueError("Expected two zone names separated by '-'")
         return ((x1 + x2) / 2, (y1 + y2) / 2)
 
-    
     def run(self) -> None:
         """Animate drone movements and handle keyboard and mouse events."""
         running = True

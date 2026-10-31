@@ -3,11 +3,11 @@ MAIN = codes/main.py
 MAP ?= maps/medium/03_priority_puzzle.txt
 
 
-install:
-	@uv sync
-
 run:
 	@uv run $(PYTHON) $(MAIN) $(MAP)
+
+install:
+	@uv sync
 
 debug:
 	@uv run python3 -m pdb $(MAIN)
